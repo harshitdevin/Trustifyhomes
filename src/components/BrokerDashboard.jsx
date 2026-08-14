@@ -15,18 +15,75 @@ import {
   ShieldAlert,
   CreditCard,
   Check,
-  X
+  X,
+  Send,
+  Flame,
+  UserCheck,
+  LayoutDashboard,
+  Building,
+  TrendingUp,
+  BarChart3,
+  Calendar,
+  Settings,
+  User,
+  Eye,
+  Heart,
+  FileText,
+  AlertCircle,
+  ChevronRight,
+  Filter,
+  Trash2,
+  PauseCircle,
+  CheckCircle,
+  MapPin,
+  Mail,
+  Phone
 } from 'lucide-react';
 import { dbService } from '../services/dbService';
+import { leadIntelligenceService } from '../services/leadIntelligenceService';
 
-export default function BrokerDashboard({ properties, onOpenPostProperty, onSelectProperty }) {
-  const [activeTab, setActiveTab] = useState('marketplace'); // marketplace | listings
+export default function BrokerDashboard({ 
+  properties, 
+  onOpenPostProperty, 
+  onSelectProperty,
+  activeTab: externalActiveTab,
+  setActiveTab: externalSetActiveTab
+}) {
+  const [internalActiveTab, setInternalActiveTab] = useState('overview'); // overview | inventory | leads | marketplace | enquiries | site_visits | analytics | profile | settings
+
+  const activeTab = externalActiveTab !== undefined ? externalActiveTab : internalActiveTab;
+  const setActiveTab = externalSetActiveTab !== undefined ? externalSetActiveTab : setInternalActiveTab;
+
+  // State Stores
+  const [brokerProperties, setBrokerProperties] = useState(() => {
+    // Filter properties belonging to broker or show sample broker inventory
+    const customProps = dbService.getCustomProperties();
+    return customProps.length > 0 ? customProps : properties.slice(0, 6);
+  });
+
+  const [inventoryFilter, setInventoryFilter] = useState('all'); // all | active | pending | sold | rented | draft
+  const [assignedLeads, setAssignedLeads] = useState(() => leadIntelligenceService.getAssignedBrokerLeads());
   const [leadList, setLeadList] = useState(() => dbService.getLeadMarketplace());
+  const [siteVisits, setSiteVisits] = useState(() => dbService.getSiteVisits());
+  const [enquiriesList, setEnquiriesList] = useState(() => dbService.getEnquiriesList());
   const [tokenBalance, setTokenBalance] = useState(() => dbService.getTokenBalance());
-  const [brokerStatus, setBrokerStatus] = useState('Active'); // Active | Blacklisted
-  const [leadSuccessMsg, setLeadSuccessMsg] = useState('');
+
+  const [statusMessage, setStatusMessage] = useState('');
   const [isTokenModalOpen, setIsTokenModalOpen] = useState(false);
-  const [paymentSuccess, setPaymentSuccess] = useState(false);
+
+  // Broker Profile State
+  const [brokerProfile, setBrokerProfile] = useState({
+    name: 'Col. Vikram Singh',
+    agencyName: 'Duggar Realty Jammu',
+    phone: '+91 94191 12345',
+    email: 'vikram.singh@gandhinagar.in',
+    address: 'Plot 42, Green Belt Road, Gandhi Nagar',
+    city: 'Jammu',
+    serviceAreas: 'Gandhi Nagar, Trikuta Nagar, Channi Himmat, Sidhra',
+    reraId: 'JKRERA/JM/AGENT/2024/00889',
+    verificationStatus: 'verified', // verified | pending | unverified
+    businessDescription: 'Premier RERA-registered real estate consultancy specializing in luxury residential kothis, apartments, commercial plots, and student PG housing across Jammu Tawi.'
+  });
 
   const TOKEN_PACKS = [
     { name: 'Starter Pack', tokens: 500, price: '₹2,500', popular: false },
@@ -34,365 +91,706 @@ export default function BrokerDashboard({ properties, onOpenPostProperty, onSele
     { name: 'Enterprise Pack', tokens: 3000, price: '₹10,000', popular: false }
   ];
 
-  const handleBuyLead = (lead) => {
-    if (brokerStatus === 'Blacklisted') {
-      alert('Your broker account is suspended/blacklisted by Admin. You cannot purchase leads.');
-      return;
-    }
+  // Property Actions
+  const handleUpdatePropertyStatus = (propId, newStatus) => {
+    const updated = brokerProperties.map(p => p.id === propId ? { ...p, status: newStatus } : p);
+    setBrokerProperties(updated);
+    setStatusMessage(`Listing status updated to ${newStatus.toUpperCase()}`);
+    setTimeout(() => setStatusMessage(''), 2500);
+  };
 
+  const handleLeadStageUpdate = (leadId, newStatus) => {
+    const updated = leadIntelligenceService.updateLeadStatus(leadId, newStatus);
+    setAssignedLeads(updated);
+    setStatusMessage(`Lead stage updated to ${newStatus.replace('_', ' ').toUpperCase()}`);
+    setTimeout(() => setStatusMessage(''), 2500);
+  };
+
+  const handleUpdateSiteVisit = (visitId, newStatus) => {
+    const updated = dbService.updateSiteVisitStatus(visitId, newStatus);
+    setSiteVisits(updated);
+    setStatusMessage(`Site visit status updated to ${newStatus}`);
+    setTimeout(() => setStatusMessage(''), 2500);
+  };
+
+  const handleBuyMarketplaceLead = (lead) => {
     if (tokenBalance < lead.leadPriceTokens) {
-      alert(`Insufficient Tokens! You need ${lead.leadPriceTokens} tokens, but your balance is ${tokenBalance}. Please top up your wallet.`);
+      alert(`Insufficient Tokens! You need ${lead.leadPriceTokens} tokens. Please top up your wallet.`);
       setIsTokenModalOpen(true);
       return;
     }
 
-    // Deduct tokens and unlock lead
     const updatedBalance = dbService.deductTokens(lead.leadPriceTokens);
     setTokenBalance(updatedBalance);
 
-    const updatedLeads = dbService.buyLead(lead.id, 'Col. Vikram Singh (Duggar Realty)');
+    const updatedLeads = dbService.buyLead(lead.id, brokerProfile.name);
     setLeadList(updatedLeads);
-    setLeadSuccessMsg(`Unlocked ${lead.buyerName}'s contact details! Deducted ${lead.leadPriceTokens} Lead Tokens.`);
-    setTimeout(() => setLeadSuccessMsg(''), 3500);
+    setStatusMessage(`Unlocked ${lead.buyerName}'s contact details! Deducted ${lead.leadPriceTokens} Tokens.`);
+    setTimeout(() => setStatusMessage(''), 3000);
   };
 
-  const handleRechargeTokens = (pack) => {
-    const newBal = dbService.rechargeTokens(pack.tokens);
-    setTokenBalance(newBal);
-    setPaymentSuccess(true);
-    setTimeout(() => {
-      setPaymentSuccess(false);
-      setIsTokenModalOpen(false);
-    }, 1500);
-  };
+  // Inventory Filtering
+  const filteredInventory = brokerProperties.filter(p => {
+    if (inventoryFilter === 'all') return true;
+    if (inventoryFilter === 'active') return p.status === 'Approved' || p.status === 'Active' || !p.status;
+    if (inventoryFilter === 'pending') return p.status === 'Pending';
+    if (inventoryFilter === 'sold') return p.status === 'Sold';
+    if (inventoryFilter === 'rented') return p.status === 'Rented';
+    if (inventoryFilter === 'paused') return p.status === 'Paused';
+    return true;
+  });
 
-  const purchasedLeadsCount = leadList.filter(l => l.isPurchased).length;
+  // Summary Metrics
+  const totalInventoryCount = brokerProperties.length + 28;
+  const activeListingsCount = brokerProperties.length + 20;
+  const pendingCount = 2;
+  const convertedCount = assignedLeads.filter(l => l.status === 'converted').length + 5;
+  const newLeadsCount = assignedLeads.filter(l => l.status === 'assigned' || l.status === 'new').length + 8;
+  const totalSiteVisitsCount = siteVisits.length + 12;
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
       
       {/* Top Banner Header */}
-      <div className="bg-slate-900 text-white rounded-xl p-6 shadow-md border border-slate-800 flex flex-wrap items-center justify-between gap-4">
+      <div className="bg-slate-900 text-white rounded-xl p-5 shadow-md border border-slate-800 flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-4">
           <div className="bg-amber-500 text-slate-950 p-3 rounded-xl font-bold">
-            <Briefcase className="w-8 h-8" />
+            <Briefcase className="w-7 h-7" />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h2 className="text-xl sm:text-2xl font-extrabold tracking-tight">Verified Broker Hub & Lead Marketplace</h2>
-              {brokerStatus === 'Active' ? (
-                <span className="bg-emerald-500 text-slate-950 text-xs font-extrabold px-2.5 py-0.5 rounded flex items-center gap-1">
+              <h2 className="text-xl sm:text-2xl font-extrabold tracking-tight">{brokerProfile.agencyName}</h2>
+              {brokerProfile.verificationStatus === 'verified' && (
+                <span className="bg-emerald-500 text-slate-950 text-xs font-extrabold px-2 py-0.5 rounded flex items-center gap-1">
                   <ShieldCheck className="w-3.5 h-3.5" /> JK RERA Verified Agent
-                </span>
-              ) : (
-                <span className="bg-red-600 text-white text-xs font-extrabold px-2.5 py-0.5 rounded flex items-center gap-1">
-                  <ShieldAlert className="w-3.5 h-3.5" /> Account Suspended
                 </span>
               )}
             </div>
-            <p className="text-xs sm:text-sm text-slate-300 mt-1">
-              Duggar Realty Jammu (License: JKRERA/JM/AGENT/2024/00889) • Gandhi Nagar, Jammu
+            <p className="text-xs text-slate-300 mt-1">
+              {brokerProfile.name} • {brokerProfile.city} • Reg: <strong className="font-mono text-emerald-400">{brokerProfile.reraId}</strong>
             </p>
           </div>
         </div>
 
         <div className="flex items-center gap-3">
-          {/* Token Wallet Display Widget */}
-          <div className="bg-slate-800 border border-slate-700 px-3 py-1.5 rounded-lg flex items-center gap-2">
-            <Coins className="w-5 h-5 text-amber-400" />
-            <div className="text-left">
-              <span className="text-[10px] text-slate-400 font-bold uppercase block">Token Balance</span>
-              <span className="text-sm font-extrabold text-amber-400 font-mono">{tokenBalance.toLocaleString('en-IN')} Tokens</span>
+          {/* Token Wallet Badge */}
+          <div 
+            onClick={() => setIsTokenModalOpen(true)}
+            className="bg-slate-800 border border-slate-700 px-3.5 py-1.5 rounded-lg cursor-pointer hover:border-amber-400 transition-colors text-right"
+          >
+            <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider block">Lead Token Wallet</span>
+            <div className="text-base font-extrabold text-amber-400 flex items-center gap-1">
+              <Coins className="w-4 h-4 text-amber-400" />
+              <span>{tokenBalance.toLocaleString()} Tokens</span>
             </div>
-            <button 
-              onClick={() => setIsTokenModalOpen(true)}
-              className="ml-1 bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold text-[11px] px-2.5 py-1 rounded transition-colors"
-            >
-              + Buy Tokens
-            </button>
           </div>
 
           <button 
             onClick={onOpenPostProperty}
-            className="ez-btn-primary bg-amber-500 text-slate-950 hover:bg-amber-400 font-bold text-xs"
+            className="ez-btn-primary bg-amber-500 text-slate-950 hover:bg-amber-400 text-xs py-2 px-3 font-bold"
           >
             <PlusCircle className="w-4 h-4" />
-            <span>Post Jammu Property</span>
+            <span>Add Property</span>
           </button>
         </div>
       </div>
 
-      {leadSuccessMsg && (
+      {statusMessage && (
         <div className="bg-emerald-50 text-emerald-800 border border-emerald-300 px-4 py-2.5 rounded-lg text-xs font-bold flex items-center gap-2">
-          <Sparkles className="w-4 h-4 text-emerald-600 shrink-0" />
-          <span>{leadSuccessMsg}</span>
+          <Check className="w-4 h-4 text-emerald-600 shrink-0" />
+          <span>{statusMessage}</span>
         </div>
       )}
 
-      {/* Stats Counter Bar */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
-          <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Token Wallet Balance</span>
-          <div className="text-2xl font-extrabold text-amber-600 mt-1 flex items-center gap-1 font-mono">
-            <Coins className="w-5 h-5 text-amber-500" />
-            {tokenBalance.toLocaleString('en-IN')}
+
+
+      {/* MODULE 1: DASHBOARD OVERVIEW */}
+      {activeTab === 'overview' && (
+        <div className="space-y-6">
+          {/* Top Metric Cards */}
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Total Inventory</span>
+              <div className="text-2xl font-extrabold text-slate-900 mt-1">{totalInventoryCount} Properties</div>
+              <span className="text-[10px] font-semibold text-emerald-600 mt-1 block">31 Active • 2 Pending</span>
+            </div>
+
+            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
+              <span className="text-[10px] font-bold text-blue-600 uppercase tracking-wider block">Active Listings</span>
+              <div className="text-2xl font-extrabold text-brand-700 mt-1">{activeListingsCount} Active</div>
+              <span className="text-[10px] text-slate-500 mt-1 block">Live on Marketplace</span>
+            </div>
+
+            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
+              <span className="text-[10px] font-bold text-amber-600 uppercase tracking-wider block">New Leads</span>
+              <div className="text-2xl font-extrabold text-amber-700 mt-1">{newLeadsCount} New</div>
+              <span className="text-[10px] text-amber-600 font-semibold mt-1 block">Direct Intent Leads</span>
+            </div>
+
+            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
+              <span className="text-[10px] font-bold text-purple-600 uppercase tracking-wider block">Site Visits</span>
+              <div className="text-2xl font-extrabold text-purple-800 mt-1">{totalSiteVisitsCount} Scheduled</div>
+              <span className="text-[10px] text-slate-500 mt-1 block">7 Confirmed Visits</span>
+            </div>
+
+            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
+              <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider block">Conversions</span>
+              <div className="text-2xl font-extrabold text-emerald-700 mt-1">{convertedCount} Deals</div>
+              <span className="text-[10px] text-emerald-600 font-semibold mt-1 block">11.9% Conversion Rate</span>
+            </div>
+          </div>
+
+          {/* Trustify Performance Communication Card */}
+          <div className="bg-slate-900 text-white p-5 rounded-xl border border-slate-800 flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <h3 className="text-base font-extrabold flex items-center gap-2 text-amber-400">
+                <TrendingUp className="w-5 h-5 text-amber-400" />
+                Your Trustify Performance Overview
+              </h3>
+              <p className="text-xs text-slate-300 mt-1">
+                Your listings are active across Jammu Tawi localities generating steady organic homebuyer activity.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-4 text-xs font-bold">
+              <div className="bg-slate-800 px-3 py-1.5 rounded border border-slate-700">
+                <span className="text-slate-400 text-[10px] block uppercase">Total Property Views</span>
+                <span className="text-base text-white">8,420 Views</span>
+              </div>
+              <div className="bg-slate-800 px-3 py-1.5 rounded border border-slate-700">
+                <span className="text-slate-400 text-[10px] block uppercase">Enquiries</span>
+                <span className="text-base text-amber-400">184 Inquiries</span>
+              </div>
+              <div className="bg-slate-800 px-3 py-1.5 rounded border border-slate-700">
+                <span className="text-slate-400 text-[10px] block uppercase">Site Visits</span>
+                <span className="text-base text-purple-300">36 Requests</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Two-Column Overview Section */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Recent Leads */}
+            <div className="bg-white rounded-xl border border-slate-200 p-4 space-y-3">
+              <div className="flex items-center justify-between pb-2 border-b border-slate-200">
+                <h4 className="text-sm font-extrabold text-slate-900 flex items-center gap-1.5">
+                  <Send className="w-4 h-4 text-amber-600" />
+                  Recent Assigned Leads
+                </h4>
+                <button onClick={() => setActiveTab('leads')} className="text-xs font-bold text-brand-700 hover:underline">
+                  View All →
+                </button>
+              </div>
+              <div className="space-y-2">
+                {assignedLeads.slice(0, 3).map(lead => (
+                  <div key={lead.id} className="p-3 bg-slate-50 border border-slate-200 rounded-lg text-xs space-y-1">
+                    <div className="flex justify-between font-bold">
+                      <span className="text-slate-900">{lead.customerName}</span>
+                      <span className="text-amber-700 uppercase text-[10px] bg-amber-100 px-1.5 py-0.2 rounded font-extrabold">
+                        {lead.priority} Priority
+                      </span>
+                    </div>
+                    <div className="text-slate-600">{lead.locality} ({lead.propertyType.toUpperCase()}) • {lead.budgetDisplay}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Upcoming Site Visits */}
+            <div className="bg-white rounded-xl border border-slate-200 p-4 space-y-3">
+              <div className="flex items-center justify-between pb-2 border-b border-slate-200">
+                <h4 className="text-sm font-extrabold text-slate-900 flex items-center gap-1.5">
+                  <Calendar className="w-4 h-4 text-purple-600" />
+                  Upcoming Site Visit Slots
+                </h4>
+                <button onClick={() => setActiveTab('site_visits')} className="text-xs font-bold text-brand-700 hover:underline">
+                  View All →
+                </button>
+              </div>
+              <div className="space-y-2">
+                {siteVisits.map(visit => (
+                  <div key={visit.id} className="p-3 bg-slate-50 border border-slate-200 rounded-lg text-xs flex justify-between items-center">
+                    <div>
+                      <div className="font-extrabold text-slate-900">{visit.customerName} ({visit.customerPhone})</div>
+                      <div className="text-[11px] text-slate-600">{visit.propertyTitle}</div>
+                      <div className="text-[10px] text-purple-800 font-semibold mt-0.5">{visit.requestedDate}</div>
+                    </div>
+                    <span className={`px-2 py-0.5 rounded text-[10px] font-extrabold uppercase ${
+                      visit.status === 'Confirmed' ? 'bg-purple-100 text-purple-800' : 'bg-slate-200 text-slate-800'
+                    }`}>
+                      {visit.status}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
+      )}
 
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
-          <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Hot Jammu Leads</span>
-          <div className="text-2xl font-extrabold text-brand-700 mt-1">{leadList.length} Leads</div>
-        </div>
-
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
-          <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Leads Purchased</span>
-          <div className="text-2xl font-extrabold text-emerald-700 mt-1">{purchasedLeadsCount} Unlocked</div>
-        </div>
-
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
-          <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Est. Commission Pool</span>
-          <div className="text-2xl font-extrabold text-amber-700 mt-1">₹7.87 Lac</div>
-        </div>
-      </div>
-
-      {/* Tabs Switcher */}
-      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-xs">
-        <div className="border-b border-slate-200 px-6 pt-4 flex items-center gap-6 text-sm font-bold">
-          <button 
-            onClick={() => setActiveTab('marketplace')}
-            className={`pb-3 transition-colors border-b-2 flex items-center gap-1.5 ${
-              activeTab === 'marketplace' 
-                ? 'border-brand-700 text-brand-700 font-extrabold' 
-                : 'border-transparent text-slate-500 hover:text-slate-800'
-            }`}
-          >
-            <Coins className="w-4 h-4 text-amber-600" />
-            Buy Buyer Leads Marketplace ({leadList.length})
-          </button>
-
-          <button 
-            onClick={() => setActiveTab('listings')}
-            className={`pb-3 transition-colors border-b-2 ${
-              activeTab === 'listings' 
-                ? 'border-brand-700 text-brand-700 font-extrabold' 
-                : 'border-transparent text-slate-500 hover:text-slate-800'
-            }`}
-          >
-            My Active Properties ({properties.length})
-          </button>
-        </div>
-
-        {/* Tab Content */}
-        <div className="p-6">
-          {activeTab === 'marketplace' ? (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <h3 className="text-sm font-extrabold text-slate-900">
-                  Exclusive High-Intent Buyer Leads in Jammu
+      {/* MODULE 2: BROKER INVENTORY (/broker/inventory) */}
+      {activeTab === 'inventory' && (
+        <div className="space-y-4">
+          <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-slate-200">
+              <div>
+                <h3 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
+                  <Building className="w-5 h-5 text-brand-600" />
+                  My Property Inventory ({filteredInventory.length})
                 </h3>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-slate-500 font-semibold">
-                    Leads filtered by price & commission
-                  </span>
-                  <button 
-                    onClick={() => setIsTokenModalOpen(true)}
-                    className="text-xs font-bold text-amber-800 bg-amber-50 hover:bg-amber-100 px-2.5 py-1 rounded border border-amber-300"
-                  >
-                    + Top Up Tokens
-                  </button>
-                </div>
+                <p className="text-xs text-slate-500">Manage and track your active, pending, sold, and rented listings</p>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {leadList.map(lead => (
-                  <div key={lead.id} className="bg-slate-50 border border-slate-200 rounded-xl p-4 flex flex-col justify-between space-y-3">
-                    <div>
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="bg-blue-100 text-brand-800 text-[10px] font-extrabold px-2 py-0.5 rounded border border-blue-200 uppercase">
-                          {lead.locality}, Jammu • {lead.propertyType}
+              {/* Status Filters */}
+              <div className="flex flex-wrap gap-1.5 text-xs font-bold">
+                {['all', 'active', 'pending', 'sold', 'rented', 'paused'].map(filterKey => (
+                  <button
+                    key={filterKey}
+                    onClick={() => setInventoryFilter(filterKey)}
+                    className={`px-3 py-1 rounded-lg uppercase tracking-wider text-[10px] transition-all ${
+                      inventoryFilter === filterKey 
+                        ? 'bg-slate-900 text-white font-extrabold' 
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
+                  >
+                    {filterKey}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Inventory List */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {filteredInventory.map(prop => (
+                <div key={prop.id} className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3 relative hover:shadow-sm transition-all">
+                  <div className="flex gap-3">
+                    <img 
+                      src={prop.image || 'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=400&q=80'} 
+                      alt={prop.title}
+                      className="w-24 h-24 rounded-lg object-cover border border-slate-200 shrink-0"
+                    />
+                    <div className="flex-1 space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-extrabold uppercase bg-brand-100 text-brand-900 px-2 py-0.5 rounded">
+                          {prop.listingType || 'RENT'}
                         </span>
-                        <span className="text-[10px] text-slate-400 font-bold">{lead.inquiryDate}</span>
+                        <span className={`text-[10px] font-extrabold uppercase px-2 py-0.5 rounded ${
+                          prop.status === 'Sold' ? 'bg-red-100 text-red-800' :
+                          prop.status === 'Rented' ? 'bg-purple-100 text-purple-800' :
+                          prop.status === 'Paused' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'
+                        }`}>
+                          {prop.status || 'Active'}
+                        </span>
                       </div>
+                      <h4 className="text-sm font-extrabold text-slate-900 line-clamp-1">{prop.title}</h4>
+                      <p className="text-xs font-semibold text-slate-600">{prop.locality}, Jammu</p>
+                      <p className="text-sm font-extrabold text-emerald-700">{prop.price || prop.priceDisplay}</p>
+                    </div>
+                  </div>
 
-                      <h4 className="text-base font-extrabold text-slate-900">{lead.buyerName}</h4>
-                      
-                      {/* Price & Commission Pill Box */}
-                      <div className="bg-white p-2.5 rounded-lg border border-slate-200 my-2 grid grid-cols-2 gap-2 text-xs">
-                        <div>
-                          <span className="text-slate-400 text-[10px] font-bold block uppercase">Estimated Price Budget</span>
-                          <span className="text-sm font-extrabold text-slate-900">{lead.budgetDisplay}</span>
-                        </div>
-                        <div>
-                          <span className="text-slate-400 text-[10px] font-bold block uppercase">Broker Commission ({lead.expectedCommissionRate})</span>
-                          <span className="text-sm font-extrabold text-emerald-700">{lead.estimatedCommissionVal}</span>
-                        </div>
+                  {/* Per-Property Analytics Statistics */}
+                  <div className="grid grid-cols-4 gap-2 bg-white p-2.5 rounded-lg border border-slate-200 text-center text-xs">
+                    <div>
+                      <span className="text-[9px] text-slate-400 font-bold uppercase block">Views</span>
+                      <span className="font-extrabold text-slate-900">{prop.views || 324}</span>
+                    </div>
+                    <div>
+                      <span className="text-[9px] text-slate-400 font-bold uppercase block">Favorites</span>
+                      <span className="font-extrabold text-rose-600">{prop.saves || 18}</span>
+                    </div>
+                    <div>
+                      <span className="text-[9px] text-slate-400 font-bold uppercase block">Enquiries</span>
+                      <span className="font-extrabold text-amber-600">{prop.enquiriesCount || 7}</span>
+                    </div>
+                    <div>
+                      <span className="text-[9px] text-slate-400 font-bold uppercase block">Site Visits</span>
+                      <span className="font-extrabold text-purple-600">{prop.siteVisits || 3}</span>
+                    </div>
+                  </div>
+
+                  {/* Action Buttons */}
+                  <div className="flex flex-wrap items-center justify-between gap-1.5 pt-2 border-t border-slate-200 text-[11px] font-bold">
+                    <button 
+                      onClick={() => onSelectProperty(prop)}
+                      className="px-2.5 py-1 bg-white border border-slate-300 rounded text-slate-700 hover:bg-slate-100"
+                    >
+                      View Details
+                    </button>
+                    <button 
+                      onClick={() => handleUpdatePropertyStatus(prop.id, 'Sold')}
+                      className="px-2.5 py-1 bg-emerald-50 text-emerald-800 border border-emerald-200 rounded hover:bg-emerald-100"
+                    >
+                      Mark Sold
+                    </button>
+                    <button 
+                      onClick={() => handleUpdatePropertyStatus(prop.id, 'Rented')}
+                      className="px-2.5 py-1 bg-purple-50 text-purple-800 border border-purple-200 rounded hover:bg-purple-100"
+                    >
+                      Mark Rented
+                    </button>
+                    <button 
+                      onClick={() => handleUpdatePropertyStatus(prop.id, prop.status === 'Paused' ? 'Active' : 'Paused')}
+                      className="px-2.5 py-1 bg-amber-50 text-amber-900 border border-amber-200 rounded hover:bg-amber-100"
+                    >
+                      {prop.status === 'Paused' ? 'Resume' : 'Pause'}
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODULE 3: BROKER LEADS (/broker/leads) */}
+      {activeTab === 'leads' && (
+        <div className="space-y-4">
+          <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200">
+              <div>
+                <h3 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
+                  <UserCheck className="w-5 h-5 text-emerald-600" />
+                  Assigned Direct Customer Leads
+                </h3>
+                <p className="text-xs text-slate-500">Verified buyer & tenant leads matched to your agency</p>
+              </div>
+              <span className="bg-amber-100 text-amber-900 text-xs font-bold px-2.5 py-1 rounded border border-amber-300">
+                {assignedLeads.length} Leads Assigned
+              </span>
+            </div>
+
+            <div className="space-y-4">
+              {assignedLeads.map((lead) => (
+                <div key={lead.id} className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h4 className="text-base font-extrabold text-slate-900">{lead.customerName}</h4>
+                        <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded uppercase ${
+                          lead.priority === 'hot' ? 'bg-red-100 text-red-800 border border-red-300' : 'bg-amber-100 text-amber-900'
+                        }`}>
+                          {lead.priority} priority
+                        </span>
+                        <span className="bg-blue-100 text-brand-800 text-[10px] font-extrabold px-2 py-0.5 rounded">
+                          Intent Score: {lead.intentScore}/100
+                        </span>
                       </div>
-
-                      <p className="text-xs text-slate-600 leading-relaxed bg-white/60 p-2 rounded border border-slate-200">
-                        "{lead.note}"
+                      <p className="text-xs text-slate-600 mt-1">
+                        Requirement: <strong className="text-slate-900">{lead.locality} ({lead.propertyType.toUpperCase()})</strong> • Budget: <strong className="text-emerald-700">{lead.budgetDisplay}</strong>
+                      </p>
+                      <p className="text-xs text-slate-700 mt-1">
+                        Contact: <strong className="font-mono text-slate-900">{lead.customerPhone}</strong> ({lead.customerEmail})
                       </p>
                     </div>
 
-                    {/* Unlocked Contact vs Lock CTA */}
-                    <div className="pt-3 border-t border-slate-200 flex items-center justify-between gap-2">
-                      {lead.isPurchased ? (
-                        <div className="flex items-center justify-between w-full">
-                          <div className="text-xs">
-                            <span className="text-emerald-700 font-extrabold flex items-center gap-1">
-                              <Unlock className="w-3.5 h-3.5" /> Lead Contact Unlocked
-                            </span>
-                            <span className="font-mono text-slate-900 font-bold block">{lead.buyerPhone}</span>
-                          </div>
-
-                          <div className="flex items-center gap-1">
-                            <a 
-                              href={`tel:${lead.buyerPhone}`}
-                              className="ez-btn-primary py-1.5 px-3 text-xs bg-slate-900 hover:bg-slate-800"
-                            >
-                              <PhoneCall className="w-3.5 h-3.5" /> Call
-                            </a>
-                            <a 
-                              href={`https://wa.me/${lead.buyerPhone.replace(/[^0-9]/g, '')}`}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="ez-btn-whatsapp py-1.5 px-3 text-xs"
-                            >
-                              <MessageSquare className="w-3.5 h-3.5" /> WhatsApp
-                            </a>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="flex items-center justify-between w-full">
-                          <div className="text-xs text-slate-500 font-semibold flex items-center gap-1">
-                            <Lock className="w-3.5 h-3.5 text-slate-400" /> Phone number hidden
-                          </div>
-                          <button 
-                            onClick={() => handleBuyLead(lead)}
-                            className="ez-btn-primary bg-amber-500 hover:bg-amber-600 text-slate-950 font-extrabold text-xs py-2 px-3"
-                          >
-                            <Coins className="w-3.5 h-3.5" />
-                            <span>Unlock Lead ({lead.leadPriceTokens} Tokens)</span>
-                          </button>
-                        </div>
-                      )}
+                    <div className="text-right">
+                      <span className="text-[10px] text-slate-400 font-bold block mb-1">Pipeline Stage:</span>
+                      <span className={`px-3 py-1 rounded text-xs font-extrabold uppercase ${
+                        lead.status === 'converted' ? 'bg-emerald-600 text-white' :
+                        lead.status === 'site_visit' ? 'bg-purple-600 text-white' :
+                        lead.status === 'contacted' ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-800'
+                      }`}>
+                        {lead.status.replace('_', ' ')}
+                      </span>
                     </div>
                   </div>
-                ))}
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {properties.map(p => (
-                  <div key={p.id} className="bg-slate-50 border border-slate-200 rounded-lg p-4 flex gap-4">
-                    <img src={p.images[0]} alt={p.title} className="w-24 h-24 object-cover rounded border border-slate-300 shrink-0" />
-                    <div className="flex-1 flex flex-col justify-between">
-                      <div>
-                        <div className="flex justify-between items-start">
-                          <span className="text-[10px] font-bold text-brand-700 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200">
-                            {p.bhk} BHK • {p.city}
-                          </span>
-                          <span className="text-xs font-extrabold text-slate-900">{p.priceDisplay}</span>
-                        </div>
-                        <h4 className="font-bold text-sm text-slate-900 mt-1 line-clamp-1">{p.title}</h4>
-                        <p className="text-xs text-slate-500">{p.locality}</p>
-                      </div>
 
-                      <div className="flex items-center justify-between pt-2 border-t border-slate-200 text-xs">
-                        <span className="text-emerald-700 font-bold text-[11px] flex items-center gap-1">
-                          <ShieldCheck className="w-3.5 h-3.5" /> RERA Verified
-                        </span>
-                        <button 
-                          onClick={() => onSelectProperty(p)}
-                          className="text-brand-700 font-bold hover:underline"
+                  {lead.adminNote && (
+                    <div className="bg-amber-50 text-amber-900 text-xs p-2.5 rounded border border-amber-200">
+                      <strong>Admin Note:</strong> {lead.adminNote}
+                    </div>
+                  )}
+
+                  {/* Stage Update Buttons */}
+                  <div className="pt-2 border-t border-slate-200 flex flex-wrap items-center justify-between gap-2 text-xs font-bold">
+                    <span className="text-slate-500 text-[10px] uppercase">Update Stage:</span>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      {['new', 'contacted', 'follow_up', 'site_visit', 'negotiation', 'converted', 'lost'].map(stage => (
+                        <button
+                          key={stage}
+                          onClick={() => handleLeadStageUpdate(lead.id, stage)}
+                          className={`px-2.5 py-1 rounded text-[11px] uppercase transition-all ${
+                            lead.status === stage 
+                              ? 'bg-slate-900 text-white font-extrabold' 
+                              : 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-100'
+                          }`}
                         >
-                          View Listing →
+                          {stage.replace('_', ' ')}
                         </button>
-                      </div>
+                      ))}
                     </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODULE 4: MARKETPLACE LEADS */}
+      {activeTab === 'marketplace' && (
+        <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs space-y-4">
+          <div className="flex items-center justify-between pb-3 border-b border-slate-200">
+            <h3 className="text-base font-extrabold text-slate-900">Verified Buyer Lead Marketplace</h3>
+            <span className="text-xs text-slate-500 font-bold">100% Direct Buyer Inquiries</span>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {leadList.map((lead) => (
+              <div key={lead.id} className="bg-white border border-slate-200 rounded-xl p-4 shadow-xs space-y-3">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <span className="text-[10px] font-bold text-slate-400 uppercase">{lead.city} • {lead.locality}</span>
+                    <h4 className="text-sm font-extrabold text-slate-900 mt-0.5">{lead.buyerName}</h4>
+                  </div>
+                  <span className="bg-amber-100 text-amber-900 text-[10px] font-bold px-2 py-0.5 rounded font-mono">
+                    {lead.leadPriceTokens} Tokens
+                  </span>
+                </div>
+
+                <div className="text-xs space-y-1 text-slate-600">
+                  <div>Budget: <strong className="text-slate-900">{lead.budgetDisplay}</strong></div>
+                  <div>Estimated Commission: <strong className="text-emerald-700">{lead.estimatedCommissionVal}</strong></div>
+                </div>
+
+                {lead.isPurchased ? (
+                  <div className="p-2.5 bg-emerald-50 text-emerald-800 rounded border border-emerald-200 text-xs font-bold flex items-center justify-between">
+                    <span>Phone: {lead.buyerPhone}</span>
+                    <span className="text-[10px] uppercase bg-emerald-700 text-white px-1.5 py-0.2 rounded">Unlocked</span>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => handleBuyMarketplaceLead(lead)}
+                    className="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs py-2 rounded transition-colors flex items-center justify-center gap-1.5"
+                  >
+                    <Unlock className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Unlock Contact ({lead.leadPriceTokens} Tokens)</span>
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* MODULE 5: ENQUIRIES */}
+      {activeTab === 'enquiries' && (
+        <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs space-y-4">
+          <h3 className="text-base font-extrabold text-slate-900 pb-3 border-b border-slate-200">
+            Property Callback Enquiries
+          </h3>
+          <div className="space-y-3">
+            {enquiriesList.map(enq => (
+              <div key={enq.id} className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-2 text-xs">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <h4 className="font-extrabold text-slate-900 text-sm">{enq.customerName}</h4>
+                    <span className="text-slate-500 font-mono">{enq.customerPhone}</span>
+                  </div>
+                  <span className="bg-blue-100 text-brand-800 text-[10px] font-extrabold px-2 py-0.5 rounded">
+                    {enq.status}
+                  </span>
+                </div>
+                <p className="text-slate-700 font-semibold">{enq.message}</p>
+                <div className="text-[11px] text-slate-500 font-medium">Property: {enq.propertyTitle}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* MODULE 6: SITE VISITS */}
+      {activeTab === 'site_visits' && (
+        <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs space-y-4">
+          <h3 className="text-base font-extrabold text-slate-900 pb-3 border-b border-slate-200">
+            Scheduled Site Visit Slots
+          </h3>
+          <div className="space-y-3">
+            {siteVisits.map(visit => (
+              <div key={visit.id} className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-3 text-xs">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <h4 className="font-extrabold text-slate-900 text-sm">{visit.customerName} ({visit.customerPhone})</h4>
+                    <p className="text-slate-600 font-semibold">{visit.propertyTitle}</p>
+                    <p className="text-purple-800 font-bold mt-1">Requested Time: {visit.requestedDate}</p>
+                  </div>
+                  <span className="bg-purple-100 text-purple-800 font-extrabold px-2.5 py-1 rounded uppercase">
+                    {visit.status}
+                  </span>
+                </div>
+
+                <div className="flex gap-2 pt-2 border-t border-slate-200 font-bold">
+                  <button 
+                    onClick={() => handleUpdateSiteVisit(visit.id, 'Confirmed')}
+                    className="px-3 py-1 bg-purple-600 text-white rounded text-[11px]"
+                  >
+                    Confirm Slot
+                  </button>
+                  <button 
+                    onClick={() => handleUpdateSiteVisit(visit.id, 'Completed')}
+                    className="px-3 py-1 bg-emerald-600 text-white rounded text-[11px]"
+                  >
+                    Mark Completed
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* MODULE 7: ANALYTICS (/broker/analytics) */}
+      {activeTab === 'analytics' && (
+        <div className="space-y-6">
+          <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs space-y-4">
+            <h3 className="text-base font-extrabold text-slate-900 pb-3 border-b border-slate-200">
+              Broker Business Performance & Funnel Analytics
+            </h3>
+
+            {/* Conversion Metrics */}
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+              <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
+                <span className="text-[10px] text-slate-400 font-bold uppercase block">Lead Conversion Rate</span>
+                <div className="text-2xl font-extrabold text-emerald-700 mt-1">11.9%</div>
+                <span className="text-[10px] text-slate-500 font-semibold mt-1 block">8 Deals Converted / 67 Leads</span>
+              </div>
+
+              <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
+                <span className="text-[10px] text-slate-400 font-bold uppercase block">Enquiry → Visit Rate</span>
+                <div className="text-2xl font-extrabold text-purple-700 mt-1">19.5%</div>
+                <span className="text-[10px] text-slate-500 font-semibold mt-1 block">36 Site Visits / 184 Enquiries</span>
+              </div>
+
+              <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
+                <span className="text-[10px] text-slate-400 font-bold uppercase block">Visit → Deal Rate</span>
+                <div className="text-2xl font-extrabold text-brand-700 mt-1">22.2%</div>
+                <span className="text-[10px] text-slate-500 font-semibold mt-1 block">8 Deals / 36 Site Visits</span>
+              </div>
+
+              <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
+                <span className="text-[10px] text-slate-400 font-bold uppercase block">Top Locality</span>
+                <div className="text-lg font-extrabold text-slate-900 mt-1">Gandhi Nagar</div>
+                <span className="text-[10px] text-slate-500 font-semibold mt-1 block">42% of total agency views</span>
+              </div>
+            </div>
+
+            {/* Simple Visual Chart Representation */}
+            <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3">
+              <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider">Weekly Property Views Trend</h4>
+              <div className="flex items-end gap-3 h-32 pt-4 px-2 border-b border-slate-300">
+                {[
+                  { day: 'Mon', views: 820, height: '60%' },
+                  { day: 'Tue', views: 950, height: '70%' },
+                  { day: 'Wed', views: 1120, height: '85%' },
+                  { day: 'Thu', views: 1040, height: '75%' },
+                  { day: 'Fri', views: 1350, height: '95%' },
+                  { day: 'Sat', views: 1420, height: '100%' },
+                  { day: 'Sun', views: 1280, height: '90%' }
+                ].map((item, idx) => (
+                  <div key={idx} className="flex-1 flex flex-col items-center gap-1 h-full justify-end">
+                    <div className="w-full bg-brand-600 rounded-t hover:bg-brand-700 transition-all" style={{ height: item.height }}></div>
+                    <span className="text-[10px] text-slate-600 font-bold">{item.day}</span>
                   </div>
                 ))}
               </div>
             </div>
-          )}
+          </div>
         </div>
-      </div>
+      )}
 
-      {/* Buy Lead Tokens Modal Dialog */}
-      {isTokenModalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
-          <div className="bg-white rounded-xl max-w-lg w-full p-5 sm:p-6 shadow-2xl border border-slate-200 relative my-auto space-y-4">
-            
-            {/* Header */}
-            <div className="flex items-center justify-between pb-3 border-b border-slate-200">
-              <div className="flex items-center gap-2">
-                <div className="bg-amber-100 text-amber-900 p-2 rounded-lg">
-                  <Coins className="w-5 h-5 text-amber-700" />
-                </div>
-                <div>
-                  <h3 className="text-base font-extrabold text-slate-900">Buy Lead Tokens Wallet Recharge</h3>
-                  <p className="text-xs text-slate-500">Current Balance: <strong className="text-amber-700">{tokenBalance} Tokens</strong></p>
-                </div>
-              </div>
-              <button onClick={() => setIsTokenModalOpen(false)} className="p-1 rounded text-slate-400 hover:text-slate-800">
-                <X className="w-5 h-5" />
+      {/* MODULE 8: BROKER PROFILE (/broker/profile) */}
+      {activeTab === 'profile' && (
+        <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-xs space-y-4 max-w-3xl">
+          <div className="flex items-center justify-between pb-4 border-b border-slate-200">
+            <div>
+              <h3 className="text-lg font-extrabold text-slate-900">{brokerProfile.agencyName}</h3>
+              <p className="text-xs text-slate-500">Agency RERA Registration & Profile Information</p>
+            </div>
+            {brokerProfile.verificationStatus === 'verified' && (
+              <span className="bg-emerald-100 text-emerald-800 text-xs font-extrabold px-3 py-1 rounded border border-emerald-300 flex items-center gap-1">
+                <ShieldCheck className="w-4 h-4 text-emerald-600" /> Verified RERA Broker
+              </span>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs font-semibold text-slate-700">
+            <div>
+              <span className="text-slate-400 uppercase text-[10px] block">Broker / Agent Name</span>
+              <span className="text-sm font-extrabold text-slate-900">{brokerProfile.name}</span>
+            </div>
+
+            <div>
+              <span className="text-slate-400 uppercase text-[10px] block">JK RERA Registration Number</span>
+              <span className="font-mono text-emerald-800 text-sm font-extrabold">{brokerProfile.reraId}</span>
+            </div>
+
+            <div>
+              <span className="text-slate-400 uppercase text-[10px] block">Phone Number</span>
+              <span>{brokerProfile.phone}</span>
+            </div>
+
+            <div>
+              <span className="text-slate-400 uppercase text-[10px] block">Official Email</span>
+              <span>{brokerProfile.email}</span>
+            </div>
+
+            <div className="sm:col-span-2">
+              <span className="text-slate-400 uppercase text-[10px] block">Office Address</span>
+              <span>{brokerProfile.address}, {brokerProfile.city}</span>
+            </div>
+
+            <div className="sm:col-span-2">
+              <span className="text-slate-400 uppercase text-[10px] block">Primary Service Localities</span>
+              <span className="font-extrabold text-slate-900">{brokerProfile.serviceAreas}</span>
+            </div>
+
+            <div className="sm:col-span-2 bg-slate-50 p-3 rounded-lg border border-slate-200">
+              <span className="text-slate-400 uppercase text-[10px] block">Agency Business Overview</span>
+              <p className="text-xs text-slate-700 mt-1">{brokerProfile.businessDescription}</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODULE 9: BROKER SETTINGS (/broker/settings) */}
+      {activeTab === 'settings' && (
+        <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-xs space-y-4 max-w-2xl text-xs font-semibold text-slate-700">
+          <h3 className="text-base font-extrabold text-slate-900 pb-3 border-b border-slate-200">
+            Agency Profile & Notification Settings
+          </h3>
+
+          <div className="space-y-3">
+            <div>
+              <label className="block text-slate-500 uppercase tracking-wider mb-1 text-[10px]">Agency Name</label>
+              <input 
+                type="text" 
+                value={brokerProfile.agencyName}
+                onChange={(e) => setBrokerProfile({ ...brokerProfile, agencyName: e.target.value })}
+                className="w-full bg-slate-50 border border-slate-300 rounded p-2 text-xs font-bold text-slate-900"
+              />
+            </div>
+
+            <div>
+              <label className="block text-slate-500 uppercase tracking-wider mb-1 text-[10px]">Service Areas (Comma separated)</label>
+              <input 
+                type="text" 
+                value={brokerProfile.serviceAreas}
+                onChange={(e) => setBrokerProfile({ ...brokerProfile, serviceAreas: e.target.value })}
+                className="w-full bg-slate-50 border border-slate-300 rounded p-2 text-xs font-bold text-slate-900"
+              />
+            </div>
+
+            <div className="pt-3 border-t border-slate-200">
+              <button
+                type="button"
+                onClick={() => {
+                  setStatusMessage('Agency settings updated successfully!');
+                  setTimeout(() => setStatusMessage(''), 2500);
+                }}
+                className="bg-slate-900 hover:bg-slate-800 text-white font-extrabold px-4 py-2 rounded text-xs"
+              >
+                Save Settings
               </button>
             </div>
-
-            {paymentSuccess ? (
-              <div className="bg-emerald-50 border border-emerald-300 p-6 rounded-xl text-center space-y-2">
-                <div className="w-12 h-12 bg-emerald-700 text-white rounded-full flex items-center justify-center mx-auto">
-                  <Check className="w-6 h-6 stroke-[3]" />
-                </div>
-                <h4 className="text-base font-extrabold text-slate-900">Payment Successful!</h4>
-                <p className="text-xs text-slate-600 font-medium">Your Lead Token wallet balance has been updated instantly.</p>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Select Token Recharge Pack</span>
-                <div className="space-y-2.5">
-                  {TOKEN_PACKS.map((pack, idx) => (
-                    <div 
-                      key={idx} 
-                      className={`p-3.5 rounded-xl border flex items-center justify-between gap-3 cursor-pointer transition-all ${
-                        pack.popular 
-                          ? 'bg-amber-50/50 border-amber-400 ring-2 ring-amber-400/20' 
-                          : 'bg-slate-50 border-slate-200 hover:border-slate-300'
-                      }`}
-                    >
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <h4 className="text-sm font-extrabold text-slate-900">{pack.name}</h4>
-                          {pack.popular && (
-                            <span className="bg-amber-500 text-slate-950 text-[10px] font-extrabold px-2 py-0.2 rounded uppercase">
-                              Best Value
-                            </span>
-                          )}
-                        </div>
-                        <span className="text-xs font-extrabold text-amber-700 flex items-center gap-1 mt-0.5">
-                          <Coins className="w-3.5 h-3.5" /> +{pack.tokens} Lead Tokens
-                        </span>
-                      </div>
-
-                      <div className="text-right">
-                        <div className="text-base font-extrabold text-slate-900">{pack.price}</div>
-                        <button 
-                          onClick={() => handleRechargeTokens(pack)}
-                          className="mt-1 ez-btn-primary py-1 px-3 text-xs bg-slate-900 hover:bg-slate-800"
-                        >
-                          Recharge Now
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="bg-slate-50 p-3 rounded-lg border border-slate-200 text-[11px] text-slate-500 flex items-center gap-2">
-                  <CreditCard className="w-4 h-4 text-slate-400 shrink-0" />
-                  <span>Instant UPI / NetBanking payment simulation under Indian banking standards.</span>
-                </div>
-              </div>
-            )}
           </div>
         </div>
       )}

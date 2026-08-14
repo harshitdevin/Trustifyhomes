@@ -16,25 +16,69 @@ import {
   AlertCircle
 } from 'lucide-react';
 
+import { supabaseService } from '../services/supabaseService';
+import { leadIntelligenceService } from '../services/leadIntelligenceService';
+
 export default function PropertyDetailModal({ 
   property, 
   onClose, 
   isShortlisted, 
   onToggleShortlist, 
   onOpenEmi,
-  onOpenStampDuty
+  onOpenStampDuty,
+  currentUser
 }) {
   const [activeTab, setActiveTab] = useState('photos'); // photos | floorplan
   const [activeImgIndex, setActiveImgIndex] = useState(0);
   const [inquirySubmitted, setInquirySubmitted] = useState(false);
-  const [buyerName, setBuyerName] = useState('');
+  const [buyerName, setBuyerName] = useState(currentUser?.email ? currentUser.email.split('@')[0] : '');
   const [buyerPhone, setBuyerPhone] = useState('');
+  const [isSubmittingEnquiry, setIsSubmittingEnquiry] = useState(false);
+  const [enquiryError, setEnquiryError] = useState('');
 
-  if (!property) return null;
+  if (!property) {
+    return (
+      <div className="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-4">
+        <div className="bg-white rounded-xl p-8 max-w-md w-full text-center space-y-4">
+          <AlertCircle className="w-12 h-12 text-amber-500 mx-auto" />
+          <h3 className="text-lg font-bold text-slate-900">Property Not Found</h3>
+          <p className="text-xs text-slate-500">The property listing you are looking for is unavailable or has been removed.</p>
+          <button onClick={onClose} className="ez-btn-primary py-2 px-4 text-xs">Close</button>
+        </div>
+      </div>
+    );
+  }
 
-  const handleInquirySubmit = (e) => {
+  const handleInquirySubmit = async (e) => {
     e.preventDefault();
-    setInquirySubmitted(true);
+    setEnquiryError('');
+    setIsSubmittingEnquiry(true);
+
+    try {
+      await supabaseService.submitEnquiry({
+        propertyId: property.id,
+        buyerId: currentUser?.id || null,
+        name: buyerName,
+        phone: buyerPhone,
+        email: currentUser?.email || null,
+        message: `Callback request for ${property.title}`,
+        budget: property.priceVal
+      });
+
+      leadIntelligenceService.trackActivityEvent({
+        userId: currentUser?.id || 'cust-101',
+        eventType: 'enquiry_created',
+        propertyId: property.id,
+        locality: property.locality,
+        propertyType: property.propertyType
+      });
+
+      setInquirySubmitted(true);
+    } catch (err) {
+      setEnquiryError(err.message || 'Failed to submit callback request.');
+    } finally {
+      setIsSubmittingEnquiry(false);
+    }
   };
 
   return (

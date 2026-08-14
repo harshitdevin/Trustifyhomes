@@ -4,13 +4,27 @@ import {
   MapPin, 
   PlusCircle, 
   Heart, 
-  Layers, 
   Calculator, 
   Compass, 
   ShieldCheck, 
   Briefcase,
   User,
-  ShieldAlert
+  ShieldAlert,
+  LogOut,
+  LogIn,
+  LayoutDashboard,
+  BarChart3,
+  Users,
+  Building,
+  Home,
+  Activity,
+  MessageSquare,
+  Calendar,
+  CreditCard,
+  Settings,
+  Send,
+  Sparkles,
+  Search
 } from 'lucide-react';
 import { CITIES_DATA } from '../data/citiesAndLocalities';
 
@@ -20,19 +34,54 @@ export default function Navbar({
   activeTab, 
   setActiveTab,
   shortlistCount, 
-  compareCount, 
   onOpenEmi, 
   onOpenEligibility,
   onOpenRentAgreement,
   onOpenUnitConverter, 
-  onOpenStampDuty, 
-  onOpenCompare, 
   onOpenPostProperty,
   userRole,
   setUserRole,
   activeView,
-  setActiveView
+  setActiveView,
+  currentUser,
+  onOpenAuth,
+  onLogout,
+  adminTab,
+  setAdminTab,
+  brokerTab,
+  setBrokerTab
 }) {
+  const isConsumerView = activeView === 'marketplace' || activeView === 'profile';
+  const isAdminView = activeView === 'admin';
+  const isBrokerView = activeView === 'broker' || activeView === 'owner';
+
+  const ADMIN_NAV_SECTIONS = [
+    { id: 'home', label: 'Overview', icon: LayoutDashboard },
+    { id: 'statistics', label: 'Statistics', icon: BarChart3 },
+    { id: 'customers', label: 'Customers', icon: Users },
+    { id: 'properties', label: 'Properties', icon: Building },
+    { id: 'pg', label: 'PG Listings', icon: Home },
+    { id: 'brokers', label: 'Brokers', icon: Briefcase },
+    { id: 'leads', label: 'Leads', icon: Activity },
+    { id: 'verification', label: 'Verification', icon: ShieldCheck },
+    { id: 'enquiries', label: 'Enquiries', icon: MessageSquare },
+    { id: 'site_visits', label: 'Site Visits', icon: Calendar },
+    { id: 'payments', label: 'Payments', icon: CreditCard },
+    { id: 'settings', label: 'Logs', icon: Settings }
+  ];
+
+  const BROKER_NAV_SECTIONS = [
+    { id: 'overview', label: 'Overview', icon: LayoutDashboard },
+    { id: 'inventory', label: 'My Inventory', icon: Building },
+    { id: 'leads', label: 'My Leads', icon: Send },
+    { id: 'marketplace', label: 'Marketplace', icon: Sparkles },
+    { id: 'enquiries', label: 'Enquiries', icon: MessageSquare },
+    { id: 'site_visits', label: 'Site Visits', icon: Calendar },
+    { id: 'analytics', label: 'Analytics', icon: BarChart3 },
+    { id: 'profile', label: 'Profile', icon: User },
+    { id: 'settings', label: 'Settings', icon: Settings }
+  ];
+
   return (
     <header className="bg-white border-b border-slate-200 sticky top-0 z-40 shadow-sm">
       {/* Top Strip - RERA Trust & Tools Bar */}
@@ -83,9 +132,9 @@ export default function Navbar({
       </div>
 
       {/* Main Navigation Bar */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5 flex items-center justify-between gap-4">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex items-center justify-between gap-4">
         {/* Brand Logo & City Selector */}
-        <div className="flex items-center gap-4 lg:gap-6">
+        <div className="flex items-center gap-4 lg:gap-6 shrink-0">
           <div 
             onClick={() => { setActiveView('marketplace'); setActiveTab('buy'); }} 
             className="flex items-center gap-2.5 cursor-pointer group"
@@ -105,7 +154,7 @@ export default function Navbar({
           </div>
 
           {/* City Selection Dropdown */}
-          <div className="relative">
+          <div className="relative hidden sm:block">
             <div className="flex items-center gap-1.5 bg-slate-100 border border-slate-300 px-3 py-1.5 rounded-md hover:border-slate-400 cursor-pointer">
               <MapPin className="w-4 h-4 text-brand-700" />
               <select 
@@ -125,127 +174,165 @@ export default function Navbar({
           </div>
         </div>
 
-        {/* Primary View Navigation Tabs */}
-        <nav className="hidden md:flex items-center gap-1 font-semibold text-sm">
-          <button 
-            onClick={() => { setActiveView('marketplace'); setActiveTab('buy'); }}
-            className={`px-3.5 py-2 rounded-md transition-colors ${
-              activeView === 'marketplace' && activeTab === 'buy' 
-                ? 'bg-blue-50 text-brand-700 font-bold border border-blue-200' 
-                : 'text-slate-700 hover:bg-slate-100'
-            }`}
-          >
-            Buy Homes
-          </button>
+        {/* Dynamic Navigation Bar Style according to Active View */}
+        <nav className="hidden lg:flex items-center gap-1 font-semibold text-xs overflow-x-auto py-1">
+          {/* Consumer View Links (Shown ONLY on Marketplace / Consumer view) */}
+          {isConsumerView && (
+            <>
+              <button 
+                onClick={() => { setActiveView('marketplace'); setActiveTab('buy'); }}
+                className={`px-3 py-2 rounded-md transition-colors ${
+                  activeView === 'marketplace' && activeTab === 'buy' 
+                    ? 'bg-blue-50 text-brand-700 font-bold border border-blue-200' 
+                    : 'text-slate-700 hover:bg-slate-100'
+                }`}
+              >
+                Buy Homes
+              </button>
 
-          <button 
-            onClick={() => { setActiveView('marketplace'); setActiveTab('rent'); }}
-            className={`px-3.5 py-2 rounded-md transition-colors ${
-              activeView === 'marketplace' && activeTab === 'rent' 
-                ? 'bg-blue-50 text-brand-700 font-bold border border-blue-200' 
-                : 'text-slate-700 hover:bg-slate-100'
-            }`}
-          >
-            Rent / Lease
-          </button>
+              <button 
+                onClick={() => { setActiveView('marketplace'); setActiveTab('rent'); }}
+                className={`px-3 py-2 rounded-md transition-colors ${
+                  activeView === 'marketplace' && activeTab === 'rent' 
+                    ? 'bg-blue-50 text-brand-700 font-bold border border-blue-200' 
+                    : 'text-slate-700 hover:bg-slate-100'
+                }`}
+              >
+                Rent / Lease
+              </button>
 
-          <button 
-            onClick={() => { setActiveView('marketplace'); setActiveTab('plot'); }}
-            className={`px-3.5 py-2 rounded-md transition-colors ${
-              activeView === 'marketplace' && activeTab === 'plot' 
-                ? 'bg-blue-50 text-brand-700 font-bold border border-blue-200' 
-                : 'text-slate-700 hover:bg-slate-100'
-            }`}
-          >
-            Plots (Kanal/Marla)
-          </button>
-
-          {/* Role-Specific Portal Button */}
-          {userRole === 'admin' && (
-            <button 
-              onClick={() => setActiveView('admin')}
-              className={`px-3.5 py-2 rounded-md transition-colors flex items-center gap-1.5 ${
-                activeView === 'admin' 
-                  ? 'bg-purple-100 text-purple-900 font-extrabold border border-purple-300' 
-                  : 'text-purple-800 hover:bg-purple-50 font-bold'
-              }`}
-            >
-              <ShieldAlert className="w-4 h-4 text-purple-700" />
-              Admin Portal
-            </button>
+              <button 
+                onClick={() => { setActiveView('marketplace'); setActiveTab('plot'); }}
+                className={`px-3 py-2 rounded-md transition-colors ${
+                  activeView === 'marketplace' && activeTab === 'plot' 
+                    ? 'bg-blue-50 text-brand-700 font-bold border border-blue-200' 
+                    : 'text-slate-700 hover:bg-slate-100'
+                }`}
+              >
+                Plots (Kanal/Marla)
+              </button>
+            </>
           )}
 
-          {userRole === 'broker' && (
-            <button 
-              onClick={() => setActiveView('broker')}
-              className={`px-3.5 py-2 rounded-md transition-colors flex items-center gap-1.5 ${
-                activeView === 'broker' 
-                  ? 'bg-amber-100 text-amber-950 font-extrabold border border-amber-300' 
-                  : 'text-amber-900 hover:bg-amber-50 font-bold'
-              }`}
-            >
-              <Briefcase className="w-4 h-4 text-amber-700" />
-              Broker Hub & Leads
-            </button>
+          {/* Admin Navigation Bar Sections (Shown ONLY on Admin View) */}
+          {isAdminView && (
+            <div className="flex items-center gap-1 bg-purple-50 p-1 rounded-lg border border-purple-200">
+              {ADMIN_NAV_SECTIONS.map((sec) => {
+                const IconComp = sec.icon;
+                const isActive = adminTab === sec.id;
+                return (
+                  <button
+                    key={sec.id}
+                    onClick={() => setAdminTab(sec.id)}
+                    className={`px-2.5 py-1.5 rounded-md transition-all flex items-center gap-1.5 whitespace-nowrap font-bold text-xs ${
+                      isActive 
+                        ? 'bg-purple-950 text-white shadow-xs' 
+                        : 'text-purple-900 hover:bg-purple-100'
+                    }`}
+                  >
+                    <IconComp className={`w-3.5 h-3.5 ${isActive ? 'text-purple-300' : 'text-purple-700'}`} />
+                    <span>{sec.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Broker Navigation Bar Sections (Shown ONLY on Broker View) */}
+          {isBrokerView && (
+            <div className="flex items-center gap-1 bg-amber-50 p-1 rounded-lg border border-amber-200">
+              {BROKER_NAV_SECTIONS.map((sec) => {
+                const IconComp = sec.icon;
+                const isActive = brokerTab === sec.id;
+                return (
+                  <button
+                    key={sec.id}
+                    onClick={() => setBrokerTab(sec.id)}
+                    className={`px-2.5 py-1.5 rounded-md transition-all flex items-center gap-1.5 whitespace-nowrap font-bold text-xs ${
+                      isActive 
+                        ? 'bg-slate-900 text-white shadow-xs' 
+                        : 'text-amber-950 hover:bg-amber-100'
+                    }`}
+                  >
+                    <IconComp className={`w-3.5 h-3.5 ${isActive ? 'text-amber-400' : 'text-amber-700'}`} />
+                    <span>{sec.label}</span>
+                  </button>
+                );
+              })}
+            </div>
           )}
         </nav>
 
-        {/* User Role Switcher & Action Buttons */}
-        <div className="flex items-center gap-2 sm:gap-3">
+        {/* User Role Switcher, Auth & Action Controls */}
+        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
           
-          {/* Role Selection Dropdown */}
-          <div className="flex items-center gap-1 bg-slate-100 border border-slate-300 px-2 py-1.5 rounded-md text-xs font-bold">
-            <span className="text-slate-400 hidden lg:inline">Role:</span>
-            <select 
-              value={userRole}
-              onChange={(e) => {
-                const role = e.target.value;
-                setUserRole(role);
-                if (role === 'admin') setActiveView('admin');
-                else if (role === 'broker') setActiveView('broker');
-                else setActiveView('marketplace');
-              }}
-              className="bg-transparent font-extrabold text-slate-900 outline-none cursor-pointer uppercase text-[11px]"
-            >
-              <option value="customer">Customer (Buyer)</option>
-              <option value="broker">Broker (Agent)</option>
-              <option value="admin">Admin (Superuser)</option>
-            </select>
+          {/* Static User Role Badge */}
+          <div className="flex items-center gap-1.5 bg-slate-100 border border-slate-300 px-2.5 py-1.5 rounded-md text-xs font-bold">
+            <span className="text-slate-500 text-[10px] uppercase tracking-wider hidden sm:inline">Role:</span>
+            <span className={`text-[10px] font-extrabold uppercase px-2 py-0.5 rounded shadow-2xs ${
+              userRole === 'admin' ? 'bg-purple-950 text-white' :
+              userRole === 'broker' ? 'bg-amber-500 text-slate-950' :
+              userRole === 'owner' ? 'bg-blue-600 text-white' : 'bg-emerald-600 text-white'
+            }`}>
+              {userRole}
+            </span>
           </div>
 
-          {/* Profile Page Link */}
-          <button 
-            onClick={() => setActiveView('profile')}
-            className={`p-2 rounded-md transition-colors flex items-center gap-1 text-xs font-bold ${
-              activeView === 'profile' 
-                ? 'bg-brand-700 text-white' 
-                : 'bg-slate-100 text-slate-800 hover:bg-slate-200'
-            }`}
-            title="Manage Profile"
-          >
-            <User className="w-4 h-4" />
-            <span className="hidden sm:inline">Profile</span>
-          </button>
+          {/* Profile & Auth State Button */}
+          {currentUser ? (
+            <div className="flex items-center gap-1.5">
+              <button 
+                onClick={() => setActiveView('profile')}
+                className={`p-2 rounded-md transition-colors flex items-center gap-1 text-xs font-bold ${
+                  activeView === 'profile' 
+                    ? 'bg-brand-700 text-white' 
+                    : 'bg-slate-100 text-slate-800 hover:bg-slate-200'
+                }`}
+                title="Manage Profile"
+              >
+                <User className="w-4 h-4" />
+                <span className="hidden sm:inline">{currentUser.email?.split('@')[0]}</span>
+              </button>
 
-          {/* Shortlists Button */}
-          <button 
-            onClick={() => { setActiveView('marketplace'); setActiveTab('saved'); }}
-            className={`relative p-2 rounded-md transition-colors flex items-center gap-1 text-sm font-medium ${
-              activeView === 'marketplace' && activeTab === 'saved' ? 'bg-red-50 text-red-700' : 'text-slate-700 hover:bg-slate-100'
-            }`}
-            title="View saved shortlisted properties"
-          >
-            <Heart className={`w-5 h-5 ${shortlistCount > 0 ? 'text-red-600 fill-red-600' : 'text-slate-600'}`} />
-            <span className="hidden sm:inline">Saved</span>
-            {shortlistCount > 0 && (
-              <span className="bg-red-600 text-white text-xs font-bold w-5 h-5 rounded-full flex items-center justify-center">
-                {shortlistCount}
-              </span>
-            )}
-          </button>
+              <button
+                onClick={onLogout}
+                className="p-2 rounded-md bg-slate-100 hover:bg-red-50 text-slate-600 hover:text-red-700 transition-colors"
+                title="Sign Out"
+              >
+                <LogOut className="w-4 h-4" />
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={onOpenAuth}
+              className="px-3 py-2 rounded-md bg-brand-700 hover:bg-brand-800 text-white font-bold text-xs flex items-center gap-1.5 transition-colors shadow-xs"
+            >
+              <LogIn className="w-3.5 h-3.5" />
+              <span>Login / Register</span>
+            </button>
+          )}
 
-          {/* Post Property Button (ONLY FOR BROKER AND ADMIN - HIDDEN FOR CUSTOMERS) */}
-          {(userRole === 'broker' || userRole === 'admin') && (
+          {/* Shortlists Button (Consumer view only) */}
+          {isConsumerView && (
+            <button 
+              onClick={() => { setActiveView('marketplace'); setActiveTab('saved'); }}
+              className={`relative p-2 rounded-md transition-colors flex items-center gap-1 text-sm font-medium ${
+                activeView === 'marketplace' && activeTab === 'saved' ? 'bg-red-50 text-red-700' : 'text-slate-700 hover:bg-slate-100'
+              }`}
+              title="View saved shortlisted properties"
+            >
+              <Heart className={`w-5 h-5 ${shortlistCount > 0 ? 'text-red-600 fill-red-600' : 'text-slate-600'}`} />
+              <span className="hidden sm:inline">Saved</span>
+              {shortlistCount > 0 && (
+                <span className="bg-red-600 text-white text-xs font-bold w-5 h-5 rounded-full flex items-center justify-center">
+                  {shortlistCount}
+                </span>
+              )}
+            </button>
+          )}
+
+          {/* Post Property Button (Consumer / Owner view only - hidden on broker & admin pages as requested) */}
+          {isConsumerView && (userRole === 'owner' || userRole === 'buyer') && (
             <button 
               onClick={onOpenPostProperty}
               className="ez-btn-primary bg-amber-600 hover:bg-amber-700 text-white shadow-sm text-sm"
@@ -259,6 +346,43 @@ export default function Navbar({
           )}
         </div>
       </div>
+
+      {/* Secondary Bar for Mobile & Compact Screens displaying active role navigation */}
+      {!isConsumerView && (
+        <div className="lg:hidden bg-slate-100 border-t border-slate-200 px-4 py-2 overflow-x-auto">
+          {isAdminView && (
+            <div className="flex items-center gap-1 text-xs font-bold">
+              {ADMIN_NAV_SECTIONS.map((sec) => (
+                <button
+                  key={sec.id}
+                  onClick={() => setAdminTab(sec.id)}
+                  className={`px-2.5 py-1.5 rounded-md whitespace-nowrap ${
+                    adminTab === sec.id ? 'bg-purple-950 text-white' : 'bg-white text-purple-950 border border-slate-200'
+                  }`}
+                >
+                  {sec.label}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {isBrokerView && (
+            <div className="flex items-center gap-1 text-xs font-bold">
+              {BROKER_NAV_SECTIONS.map((sec) => (
+                <button
+                  key={sec.id}
+                  onClick={() => setBrokerTab(sec.id)}
+                  className={`px-2.5 py-1.5 rounded-md whitespace-nowrap ${
+                    brokerTab === sec.id ? 'bg-slate-900 text-white' : 'bg-white text-slate-800 border border-slate-200'
+                  }`}
+                >
+                  {sec.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </header>
   );
 }

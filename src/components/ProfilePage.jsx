@@ -15,23 +15,41 @@ import {
   RotateCcw
 } from 'lucide-react';
 
-export default function ProfilePage({ userRole, setUserRole, shortlistCount }) {
+import { supabaseService } from '../services/supabaseService';
+
+export default function ProfilePage({ userRole, setUserRole, shortlistCount, currentUser }) {
   const [userName, setUserName] = useState(() => {
+    if (currentUser?.user_metadata?.full_name) return currentUser.user_metadata.full_name;
     if (userRole === 'admin') return 'System Administrator';
     if (userRole === 'broker') return 'Col. Vikram Singh (Duggar Realty)';
     return 'Harshit Sharma';
   });
 
-  const [userPhone, setUserPhone] = useState('+91 94191 55443');
-  const [userEmail, setUserEmail] = useState('harshit.sharma@ezhomes.in');
-  const [userCity, setUserCity] = useState('Jammu');
+  const [userPhone, setUserPhone] = useState(() => currentUser?.user_metadata?.phone || '+91 94191 55443');
+  const [userEmail, setUserEmail] = useState(() => currentUser?.email || 'harshit.sharma@ezhomes.in');
+  const [userCity, setUserCity] = useState(() => currentUser?.user_metadata?.city || 'Jammu');
   const [reraLicense, setReraLicense] = useState('JKRERA/JM/AGENT/2024/00889');
   const [savedSuccess, setSavedSuccess] = useState(false);
+  const [saving, setSaving] = useState(false);
 
-  const handleSaveProfile = (e) => {
+  const handleSaveProfile = async (e) => {
     e.preventDefault();
-    setSavedSuccess(true);
-    setTimeout(() => setSavedSuccess(false), 2500);
+    setSaving(true);
+    try {
+      if (currentUser?.id) {
+        await supabaseService.updateProfile(currentUser.id, {
+          full_name: userName,
+          phone: userPhone,
+          city: userCity
+        });
+      }
+      setSavedSuccess(true);
+      setTimeout(() => setSavedSuccess(false), 2500);
+    } catch (err) {
+      console.error('Failed to update profile:', err.message);
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -69,35 +87,12 @@ export default function ProfilePage({ userRole, setUserRole, shortlistCount }) {
           </div>
         </div>
 
-        {/* Role Switcher Pills inside Profile */}
-        <div className="bg-slate-800 p-2 rounded-lg border border-slate-700 space-y-1">
-          <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block text-center">Switch Active Role:</span>
-          <div className="flex items-center gap-1">
-            <button 
-              onClick={() => setUserRole('customer')}
-              className={`px-3 py-1 rounded text-xs font-bold transition-all ${
-                userRole === 'customer' ? 'bg-emerald-600 text-white' : 'text-slate-300 hover:bg-slate-700'
-              }`}
-            >
-              Customer
-            </button>
-            <button 
-              onClick={() => setUserRole('broker')}
-              className={`px-3 py-1 rounded text-xs font-bold transition-all ${
-                userRole === 'broker' ? 'bg-amber-500 text-slate-950' : 'text-slate-300 hover:bg-slate-700'
-              }`}
-            >
-              Broker
-            </button>
-            <button 
-              onClick={() => setUserRole('admin')}
-              className={`px-3 py-1 rounded text-xs font-bold transition-all ${
-                userRole === 'admin' ? 'bg-purple-600 text-white' : 'text-slate-300 hover:bg-slate-700'
-              }`}
-            >
-              Admin
-            </button>
-          </div>
+        {/* Static Role Indicator inside Profile */}
+        <div className="bg-slate-800 p-2.5 rounded-lg border border-slate-700 space-y-1 text-center">
+          <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Account Role:</span>
+          <span className="inline-block px-3 py-1 rounded text-xs font-extrabold uppercase bg-emerald-600 text-white tracking-wider">
+            {userRole}
+          </span>
         </div>
       </div>
 
