@@ -37,10 +37,12 @@ import {
   CheckCircle,
   MapPin,
   Mail,
-  Phone
+  Phone,
+  Key
 } from 'lucide-react';
 import { dbService } from '../services/dbService';
 import { leadIntelligenceService } from '../services/leadIntelligenceService';
+import { supabaseService } from '../services/supabaseService';
 
 export default function BrokerDashboard({ 
   properties, 
@@ -49,19 +51,18 @@ export default function BrokerDashboard({
   activeTab: externalActiveTab,
   setActiveTab: externalSetActiveTab
 }) {
-  const [internalActiveTab, setInternalActiveTab] = useState('overview'); // overview | inventory | leads | marketplace | enquiries | site_visits | analytics | profile | settings
+  const [internalActiveTab, setInternalActiveTab] = useState('overview'); 
 
   const activeTab = externalActiveTab !== undefined ? externalActiveTab : internalActiveTab;
   const setActiveTab = externalSetActiveTab !== undefined ? externalSetActiveTab : setInternalActiveTab;
 
   // State Stores
   const [brokerProperties, setBrokerProperties] = useState(() => {
-    // Filter properties belonging to broker or show sample broker inventory
     const customProps = dbService.getCustomProperties();
     return customProps.length > 0 ? customProps : properties.slice(0, 6);
   });
 
-  const [inventoryFilter, setInventoryFilter] = useState('all'); // all | active | pending | sold | rented | draft
+  const [inventoryFilter, setInventoryFilter] = useState('all'); 
   const [assignedLeads, setAssignedLeads] = useState(() => leadIntelligenceService.getAssignedBrokerLeads());
   const [leadList, setLeadList] = useState(() => dbService.getLeadMarketplace());
   const [siteVisits, setSiteVisits] = useState(() => dbService.getSiteVisits());
@@ -70,6 +71,10 @@ export default function BrokerDashboard({
 
   const [statusMessage, setStatusMessage] = useState('');
   const [isTokenModalOpen, setIsTokenModalOpen] = useState(false);
+
+  // Password change state
+  const [newPassword, setNewPassword] = useState('');
+  const [passwordStatus, setPasswordStatus] = useState('');
 
   // Broker Profile State
   const [brokerProfile, setBrokerProfile] = useState({
@@ -81,7 +86,7 @@ export default function BrokerDashboard({
     city: 'Jammu',
     serviceAreas: 'Gandhi Nagar, Trikuta Nagar, Channi Himmat, Sidhra',
     reraId: 'JKRERA/JM/AGENT/2024/00889',
-    verificationStatus: 'verified', // verified | pending | unverified
+    verificationStatus: 'verified',
     businessDescription: 'Premier RERA-registered real estate consultancy specializing in luxury residential kothis, apartments, commercial plots, and student PG housing across Jammu Tawi.'
   });
 
@@ -96,6 +101,14 @@ export default function BrokerDashboard({
     const updated = brokerProperties.map(p => p.id === propId ? { ...p, status: newStatus } : p);
     setBrokerProperties(updated);
     setStatusMessage(`Listing status updated to ${newStatus.toUpperCase()}`);
+    setTimeout(() => setStatusMessage(''), 2500);
+  };
+
+  const handleDeleteProperty = (propId) => {
+    if (!window.confirm('Are you sure you want to delete this listing from your inventory?')) return;
+    const updated = brokerProperties.filter(p => p.id !== propId);
+    setBrokerProperties(updated);
+    setStatusMessage('Property deleted successfully!');
     setTimeout(() => setStatusMessage(''), 2500);
   };
 
@@ -129,24 +142,49 @@ export default function BrokerDashboard({
     setTimeout(() => setStatusMessage(''), 3000);
   };
 
+  const handleRechargeTokens = (tokenAmount) => {
+    const updated = dbService.rechargeTokens(tokenAmount);
+    setTokenBalance(updated);
+    setIsTokenModalOpen(false);
+    setStatusMessage(`Successfully topped up wallet with ${tokenAmount} Lead Tokens!`);
+    setTimeout(() => setStatusMessage(''), 3000);
+  };
+
+  const handleChangePassword = async (e) => {
+    e.preventDefault();
+    if (!newPassword || newPassword.length < 6) {
+      setPasswordStatus('Password must be at least 6 characters long.');
+      return;
+    }
+    try {
+      await supabaseService.updatePassword(newPassword);
+      setPasswordStatus('Password updated successfully!');
+      setNewPassword('');
+      setTimeout(() => setPasswordStatus(''), 3000);
+    } catch (err) {
+      setPasswordStatus(err.message || 'Failed to update password.');
+    }
+  };
+
   // Inventory Filtering
   const filteredInventory = brokerProperties.filter(p => {
     if (inventoryFilter === 'all') return true;
-    if (inventoryFilter === 'active') return p.status === 'Approved' || p.status === 'Active' || !p.status;
-    if (inventoryFilter === 'pending') return p.status === 'Pending';
-    if (inventoryFilter === 'sold') return p.status === 'Sold';
-    if (inventoryFilter === 'rented') return p.status === 'Rented';
-    if (inventoryFilter === 'paused') return p.status === 'Paused';
+    if (inventoryFilter === 'active') return p.status === 'Approved' || p.status === 'approved' || p.status === 'Active' || !p.status;
+    if (inventoryFilter === 'pending') return p.status === 'Pending' || p.status === 'pending_review';
+    if (inventoryFilter === 'sold') return p.status === 'Sold' || p.status === 'sold';
+    if (inventoryFilter === 'rented') return p.status === 'Rented' || p.status === 'rented';
+    if (inventoryFilter === 'paused') return p.status === 'Paused' || p.status === 'paused';
     return true;
   });
 
-  // Summary Metrics
-  const totalInventoryCount = brokerProperties.length + 28;
-  const activeListingsCount = brokerProperties.length + 20;
-  const pendingCount = 2;
-  const convertedCount = assignedLeads.filter(l => l.status === 'converted').length + 5;
-  const newLeadsCount = assignedLeads.filter(l => l.status === 'assigned' || l.status === 'new').length + 8;
-  const totalSiteVisitsCount = siteVisits.length + 12;
+  // Summary Metrics (Computed from actual data, zero hardcoded additions)
+  const totalInventoryCount = brokerProperties.length;
+  const activeListingsCount = brokerProperties.filter(p => p.status === 'Approved' || p.status === 'approved' || p.status === 'Active' || !p.status).length;
+  const pendingCount = brokerProperties.filter(p => p.status === 'Pending' || p.status === 'pending_review').length;
+  const convertedCount = assignedLeads.filter(l => l.status === 'converted').length;
+  const newLeadsCount = assignedLeads.filter(l => l.status === 'assigned' || l.status === 'new').length;
+  const totalSiteVisitsCount = siteVisits.length;
+  const totalViewsSum = brokerProperties.reduce((acc, p) => acc + (p.views || 0), 0);
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
@@ -202,8 +240,6 @@ export default function BrokerDashboard({
         </div>
       )}
 
-
-
       {/* MODULE 1: DASHBOARD OVERVIEW */}
       {activeTab === 'overview' && (
         <div className="space-y-6">
@@ -212,7 +248,7 @@ export default function BrokerDashboard({
             <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Total Inventory</span>
               <div className="text-2xl font-extrabold text-slate-900 mt-1">{totalInventoryCount} Properties</div>
-              <span className="text-[10px] font-semibold text-emerald-600 mt-1 block">31 Active • 2 Pending</span>
+              <span className="text-[10px] font-semibold text-emerald-600 mt-1 block">{activeListingsCount} Active • {pendingCount} Pending</span>
             </div>
 
             <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
@@ -230,13 +266,13 @@ export default function BrokerDashboard({
             <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
               <span className="text-[10px] font-bold text-purple-600 uppercase tracking-wider block">Site Visits</span>
               <div className="text-2xl font-extrabold text-purple-800 mt-1">{totalSiteVisitsCount} Scheduled</div>
-              <span className="text-[10px] text-slate-500 mt-1 block">7 Confirmed Visits</span>
+              <span className="text-[10px] text-slate-500 mt-1 block">Visit Slots</span>
             </div>
 
             <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
               <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider block">Conversions</span>
               <div className="text-2xl font-extrabold text-emerald-700 mt-1">{convertedCount} Deals</div>
-              <span className="text-[10px] text-emerald-600 font-semibold mt-1 block">11.9% Conversion Rate</span>
+              <span className="text-[10px] text-emerald-600 font-semibold mt-1 block">Converted Leads</span>
             </div>
           </div>
 
@@ -253,16 +289,16 @@ export default function BrokerDashboard({
             </div>
             <div className="flex flex-wrap gap-4 text-xs font-bold">
               <div className="bg-slate-800 px-3 py-1.5 rounded border border-slate-700">
-                <span className="text-slate-400 text-[10px] block uppercase">Total Property Views</span>
-                <span className="text-base text-white">8,420 Views</span>
+                <span className="text-slate-400 text-[10px] block uppercase">Property Views</span>
+                <span className="text-base text-white">{totalViewsSum} Views</span>
               </div>
               <div className="bg-slate-800 px-3 py-1.5 rounded border border-slate-700">
                 <span className="text-slate-400 text-[10px] block uppercase">Enquiries</span>
-                <span className="text-base text-amber-400">184 Inquiries</span>
+                <span className="text-base text-amber-400">{enquiriesList.length} Inquiries</span>
               </div>
               <div className="bg-slate-800 px-3 py-1.5 rounded border border-slate-700">
                 <span className="text-slate-400 text-[10px] block uppercase">Site Visits</span>
-                <span className="text-base text-purple-300">36 Requests</span>
+                <span className="text-base text-purple-300">{siteVisits.length} Requests</span>
               </div>
             </div>
           </div>
@@ -327,7 +363,7 @@ export default function BrokerDashboard({
         </div>
       )}
 
-      {/* MODULE 2: BROKER INVENTORY (/broker/inventory) */}
+      {/* MODULE 2: BROKER INVENTORY (/broker/inventory - Requirement 21) */}
       {activeTab === 'inventory' && (
         <div className="space-y-4">
           <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs space-y-4">
@@ -364,7 +400,7 @@ export default function BrokerDashboard({
                 <div key={prop.id} className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3 relative hover:shadow-sm transition-all">
                   <div className="flex gap-3">
                     <img 
-                      src={prop.image || 'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=400&q=80'} 
+                      src={prop.image || prop.images?.[0] || 'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=400&q=80'} 
                       alt={prop.title}
                       className="w-24 h-24 rounded-lg object-cover border border-slate-200 shrink-0"
                     />
@@ -407,13 +443,13 @@ export default function BrokerDashboard({
                     </div>
                   </div>
 
-                  {/* Action Buttons */}
+                  {/* Action Buttons (View, Edit, Delete, Mark Sold, Mark Rented, Pause) */}
                   <div className="flex flex-wrap items-center justify-between gap-1.5 pt-2 border-t border-slate-200 text-[11px] font-bold">
                     <button 
                       onClick={() => onSelectProperty(prop)}
                       className="px-2.5 py-1 bg-white border border-slate-300 rounded text-slate-700 hover:bg-slate-100"
                     >
-                      View Details
+                      View
                     </button>
                     <button 
                       onClick={() => handleUpdatePropertyStatus(prop.id, 'Sold')}
@@ -432,6 +468,12 @@ export default function BrokerDashboard({
                       className="px-2.5 py-1 bg-amber-50 text-amber-900 border border-amber-200 rounded hover:bg-amber-100"
                     >
                       {prop.status === 'Paused' ? 'Resume' : 'Pause'}
+                    </button>
+                    <button 
+                      onClick={() => handleDeleteProperty(prop.id)}
+                      className="px-2.5 py-1 bg-red-50 text-red-700 border border-red-200 rounded hover:bg-red-100"
+                    >
+                      Delete
                     </button>
                   </div>
                 </div>
@@ -650,47 +692,28 @@ export default function BrokerDashboard({
             <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
               <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
                 <span className="text-[10px] text-slate-400 font-bold uppercase block">Lead Conversion Rate</span>
-                <div className="text-2xl font-extrabold text-emerald-700 mt-1">11.9%</div>
-                <span className="text-[10px] text-slate-500 font-semibold mt-1 block">8 Deals Converted / 67 Leads</span>
+                <div className="text-2xl font-extrabold text-emerald-700 mt-1">
+                  {assignedLeads.length > 0 ? `${((convertedCount / assignedLeads.length) * 100).toFixed(1)}%` : '0%'}
+                </div>
+                <span className="text-[10px] text-slate-500 font-semibold mt-1 block">{convertedCount} Converted / {assignedLeads.length} Leads</span>
               </div>
 
               <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
-                <span className="text-[10px] text-slate-400 font-bold uppercase block">Enquiry → Visit Rate</span>
-                <div className="text-2xl font-extrabold text-purple-700 mt-1">19.5%</div>
-                <span className="text-[10px] text-slate-500 font-semibold mt-1 block">36 Site Visits / 184 Enquiries</span>
+                <span className="text-[10px] text-slate-400 font-bold uppercase block">Enquiries Handled</span>
+                <div className="text-2xl font-extrabold text-purple-700 mt-1">{enquiriesList.length}</div>
+                <span className="text-[10px] text-slate-500 font-semibold mt-1 block">Direct Callbacks</span>
               </div>
 
               <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
-                <span className="text-[10px] text-slate-400 font-bold uppercase block">Visit → Deal Rate</span>
-                <div className="text-2xl font-extrabold text-brand-700 mt-1">22.2%</div>
-                <span className="text-[10px] text-slate-500 font-semibold mt-1 block">8 Deals / 36 Site Visits</span>
+                <span className="text-[10px] text-slate-400 font-bold uppercase block">Site Visit Slots</span>
+                <div className="text-2xl font-extrabold text-brand-700 mt-1">{siteVisits.length}</div>
+                <span className="text-[10px] text-slate-500 font-semibold mt-1 block">Scheduled Visits</span>
               </div>
 
               <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
-                <span className="text-[10px] text-slate-400 font-bold uppercase block">Top Locality</span>
-                <div className="text-lg font-extrabold text-slate-900 mt-1">Gandhi Nagar</div>
-                <span className="text-[10px] text-slate-500 font-semibold mt-1 block">42% of total agency views</span>
-              </div>
-            </div>
-
-            {/* Simple Visual Chart Representation */}
-            <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3">
-              <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider">Weekly Property Views Trend</h4>
-              <div className="flex items-end gap-3 h-32 pt-4 px-2 border-b border-slate-300">
-                {[
-                  { day: 'Mon', views: 820, height: '60%' },
-                  { day: 'Tue', views: 950, height: '70%' },
-                  { day: 'Wed', views: 1120, height: '85%' },
-                  { day: 'Thu', views: 1040, height: '75%' },
-                  { day: 'Fri', views: 1350, height: '95%' },
-                  { day: 'Sat', views: 1420, height: '100%' },
-                  { day: 'Sun', views: 1280, height: '90%' }
-                ].map((item, idx) => (
-                  <div key={idx} className="flex-1 flex flex-col items-center gap-1 h-full justify-end">
-                    <div className="w-full bg-brand-600 rounded-t hover:bg-brand-700 transition-all" style={{ height: item.height }}></div>
-                    <span className="text-[10px] text-slate-600 font-bold">{item.day}</span>
-                  </div>
-                ))}
+                <span className="text-[10px] text-slate-400 font-bold uppercase block">Total Property Views</span>
+                <div className="text-2xl font-extrabold text-slate-900 mt-1">{totalViewsSum}</div>
+                <span className="text-[10px] text-slate-500 font-semibold mt-1 block">Across inventory</span>
               </div>
             </div>
           </div>
@@ -751,11 +774,11 @@ export default function BrokerDashboard({
         </div>
       )}
 
-      {/* MODULE 9: BROKER SETTINGS (/broker/settings) */}
+      {/* MODULE 9: BROKER SETTINGS & SECURITY (/broker/settings - Requirement 26) */}
       {activeTab === 'settings' && (
-        <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-xs space-y-4 max-w-2xl text-xs font-semibold text-slate-700">
+        <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-xs space-y-6 max-w-2xl text-xs font-semibold text-slate-700">
           <h3 className="text-base font-extrabold text-slate-900 pb-3 border-b border-slate-200">
-            Agency Profile & Notification Settings
+            Agency Profile & Security Settings
           </h3>
 
           <div className="space-y-3">
@@ -779,7 +802,7 @@ export default function BrokerDashboard({
               />
             </div>
 
-            <div className="pt-3 border-t border-slate-200">
+            <div className="pt-2">
               <button
                 type="button"
                 onClick={() => {
@@ -790,6 +813,76 @@ export default function BrokerDashboard({
               >
                 Save Settings
               </button>
+            </div>
+          </div>
+
+          {/* Security & Password Change Section (Requirement 26) */}
+          <div className="pt-4 border-t border-slate-200 space-y-3">
+            <h4 className="text-xs font-extrabold text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
+              <Key className="w-4 h-4 text-brand-700" /> Security & Password Management
+            </h4>
+
+            {passwordStatus && (
+              <div className={`p-2.5 rounded text-xs font-bold ${passwordStatus.includes('success') ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-red-50 text-red-800 border border-red-200'}`}>
+                {passwordStatus}
+              </div>
+            )}
+
+            <form onSubmit={handleChangePassword} className="space-y-3">
+              <div>
+                <label className="block text-slate-500 uppercase tracking-wider mb-1 text-[10px]">New Password</label>
+                <input 
+                  type="password" 
+                  placeholder="Enter new password (min 6 characters)"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-300 rounded p-2 text-xs font-bold text-slate-900"
+                />
+              </div>
+
+              <button
+                type="submit"
+                className="bg-brand-700 hover:bg-brand-800 text-white font-extrabold px-4 py-2 rounded text-xs"
+              >
+                Update Password via Auth
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* RECHARGE LEAD TOKENS MODAL */}
+      {isTokenModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl max-w-md w-full p-6 shadow-2xl border border-slate-200 relative text-xs font-semibold text-slate-700">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200 mb-4">
+              <h3 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
+                <Coins className="w-5 h-5 text-amber-500" /> Recharge Lead Tokens
+              </h3>
+              <button onClick={() => setIsTokenModalOpen(false)} className="p-1 text-slate-400 hover:text-slate-700">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-600 mb-4">
+              Current Wallet Balance: <strong className="text-amber-600 font-extrabold text-sm">{tokenBalance} Tokens</strong>
+            </p>
+
+            <div className="space-y-3">
+              {TOKEN_PACKS.map((pack, idx) => (
+                <div key={idx} className="p-4 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between">
+                  <div>
+                    <h4 className="font-extrabold text-slate-900 text-sm">{pack.name}</h4>
+                    <p className="text-amber-700 font-bold mt-0.5">{pack.tokens} Lead Tokens</p>
+                  </div>
+                  <button 
+                    onClick={() => handleRechargeTokens(pack.tokens)}
+                    className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded font-extrabold text-xs"
+                  >
+                    Buy {pack.price}
+                  </button>
+                </div>
+              ))}
             </div>
           </div>
         </div>

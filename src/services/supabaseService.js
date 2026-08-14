@@ -6,10 +6,10 @@ export const supabaseService = {
   isConfigured: () => isSupabaseConfigured,
 
   // AUTHENTICATION API
-  signUpUser: async ({ email, password, fullName, phone, role = 'buyer', city = 'Jammu' }) => {
-    const safeRole = ['buyer', 'owner', 'broker', 'student'].includes(role.toLowerCase()) 
-      ? role.toLowerCase() 
-      : 'buyer';
+  signUpUser: async ({ email, password, fullName, phone, role = 'customer', city = 'Jammu' }) => {
+    const safeRole = ['customer', 'buyer', 'owner', 'broker', 'student'].includes(role.toLowerCase()) 
+      ? 'customer' 
+      : 'customer';
 
     if (!isSupabaseConfigured) {
       const demoUser = {
@@ -55,7 +55,7 @@ export const supabaseService = {
         demoUser = {
           id: `demo-user-${Date.now()}`,
           email,
-          user_metadata: { full_name: email.split('@')[0], phone: '+91 94191 00000', role: 'buyer', city: 'Jammu' }
+          user_metadata: { full_name: email.split('@')[0], phone: '+91 94191 00000', role: 'customer', city: 'Jammu' }
         };
         localStorage.setItem('ez_demo_user', JSON.stringify(demoUser));
       }
@@ -106,6 +106,19 @@ export const supabaseService = {
     }
   },
 
+  updatePassword: async (newPassword) => {
+    if (!isSupabaseConfigured) {
+      return { message: 'Demo password updated successfully.' };
+    }
+    try {
+      const { data, error } = await supabase.auth.updateUser({ password: newPassword });
+      if (error) throw new Error(error.message);
+      return data;
+    } catch (err) {
+      throw err;
+    }
+  },
+
   getCurrentSession: async () => {
     if (!isSupabaseConfigured) {
       const savedDemo = localStorage.getItem('ez_demo_user');
@@ -140,7 +153,6 @@ export const supabaseService = {
 
   updateProfile: async (userId, updates) => {
     if (!isSupabaseConfigured) return null;
-    // Don't allow changing role to admin via profile update
     const safeUpdates = { ...updates };
     delete safeUpdates.role;
     safeUpdates.updated_at = new Date().toISOString();
@@ -149,6 +161,19 @@ export const supabaseService = {
       .from('profiles')
       .update(safeUpdates)
       .eq('id', userId)
+      .select()
+      .single();
+
+    if (error) throw new Error(error.message);
+    return data;
+  },
+
+  updateCustomerStatus: async (customerId, newStatus) => {
+    if (!isSupabaseConfigured) return null;
+    const { data, error } = await supabase
+      .from('profiles')
+      .update({ account_status: newStatus, updated_at: new Date().toISOString() })
+      .eq('id', customerId)
       .select()
       .single();
 
@@ -166,7 +191,6 @@ export const supabaseService = {
     offset = 0 
   } = {}) => {
     if (!isSupabaseConfigured) {
-      // Fallback to local mock data filtering if DB not configured yet
       let filtered = MOCK_PROPERTIES.filter(p => p.city.toLowerCase() === city.toLowerCase());
       if (listingType === 'rent') {
         filtered = filtered.filter(p => p.listingType === 'rent');
@@ -208,9 +232,8 @@ export const supabaseService = {
       const { data, error } = await query;
 
       if (error) throw error;
-      if (!data || data.length === 0) return MOCK_PROPERTIES; // Fallback to mock data if empty DB
+      if (!data || data.length === 0) return MOCK_PROPERTIES;
 
-      // Map Supabase schema to existing MVP UI property shape
       return data.map(p => ({
         id: p.id,
         title: p.title,
@@ -236,8 +259,8 @@ export const supabaseService = {
         maintenanceMonthly: 2500,
         reraId: 'JKRERA/JM/VERIFIED/2026',
         isReraVerified: p.verification_status === 'verified',
-        sellerType: p.broker_id ? 'Broker' : 'Owner',
-        sellerName: 'Verified Owner / Agent',
+        sellerType: p.broker_id ? 'Broker' : 'Trustify Partner',
+        sellerName: 'Verified Agent / Trustify Partner',
         sellerPhone: '+91 94191 00000',
         sellerWhatsApp: '919419100000',
         images: p.property_images && p.property_images.length > 0 
@@ -246,12 +269,6 @@ export const supabaseService = {
         floorPlanUrl: 'https://images.unsplash.com/photo-1600585152220-90363fe7e115?auto=format&fit=crop&w=1000&q=80',
         amenities: p.property_amenities ? p.property_amenities.map(a => a.amenity_name) : ['Power Backup', 'Parking', 'Security'],
         localityAdvantages: [{ name: 'City Center', distance: '1.5 km' }],
-        aiFairPriceEstimate: {
-          min: `₹${(p.price / 100000).toFixed(0)} Lac`,
-          max: `₹${(p.price / 100000).toFixed(0)} Lac`,
-          valuationStatus: 'Fair Price',
-          localityGrowth5Yr: '+18.5%'
-        },
         description: p.description || 'Verified property in prime locality.'
       }));
     } catch (err) {
@@ -260,31 +277,13 @@ export const supabaseService = {
     }
   },
 
-  fetchPropertyById: async (id) => {
-    if (!isSupabaseConfigured) return null;
-    const { data, error } = await supabase
-      .from('properties')
-      .select(`
-        *,
-        property_images (*),
-        property_amenities (*)
-      `)
-      .eq('id', id)
-      .single();
-
-    if (error) throw new Error(error.message);
-    return data;
-  },
-
-  postProperty: async (propertyInput, userId, userRole = 'owner') => {
+  postProperty: async (propertyInput, userId, userRole = 'broker') => {
     if (!isSupabaseConfigured) {
       return { id: `ez-user-${Date.now()}`, ...propertyInput };
     }
 
-    const isOwner = userRole === 'owner' || userRole === 'buyer';
     const dbPayload = {
-      owner_id: isOwner ? userId : null,
-      broker_id: !isOwner ? userId : null,
+      broker_id: userId,
       title: propertyInput.title,
       description: propertyInput.description,
       listing_type: propertyInput.listingType === 'buy' ? 'sale' : propertyInput.listingType,
@@ -298,7 +297,7 @@ export const supabaseService = {
       address: propertyInput.address,
       locality: propertyInput.locality,
       city: propertyInput.city || 'Jammu',
-      status: 'pending_review', // Default status per prompt requirement 9
+      status: 'pending_review',
       verification_status: propertyInput.reraId ? 'submitted' : 'unverified'
     };
 
@@ -310,7 +309,6 @@ export const supabaseService = {
 
     if (error) throw new Error(error.message);
 
-    // Save Amenities if provided
     if (propertyInput.amenities && propertyInput.amenities.length > 0) {
       const amenitiesRows = propertyInput.amenities.map(a => ({
         property_id: createdProperty.id,
@@ -322,38 +320,92 @@ export const supabaseService = {
     return createdProperty;
   },
 
-  // STORAGE API
-  uploadPropertyImage: async (file, propertyId, isPrimary = false) => {
-    if (!isSupabaseConfigured || !file) return null;
-
-    const fileExt = file.name.split('.').pop();
-    const filePath = `properties/${propertyId}/${Date.now()}.${fileExt}`;
-
-    const { error: uploadError } = await supabase.storage
-      .from('property-images')
-      .upload(filePath, file, { cacheControl: '3600', upsert: true });
-
-    if (uploadError) throw new Error(uploadError.message);
-
-    const { data: publicUrlData } = supabase.storage
-      .from('property-images')
-      .getPublicUrl(filePath);
-
-    const publicUrl = publicUrlData.publicUrl;
-
-    const { data: imageRecord, error: imgErr } = await supabase
-      .from('property_images')
+  // LISTING REQUESTS API (Public Owner Submissions)
+  submitListingRequest: async (reqData) => {
+    if (!isSupabaseConfigured) return { success: true };
+    const { data, error } = await supabase
+      .from('listing_requests')
       .insert({
-        property_id: propertyId,
-        storage_path: filePath,
-        public_url: publicUrl,
-        is_primary: isPrimary
+        owner_name: reqData.ownerName,
+        owner_phone: reqData.ownerPhone,
+        owner_email: reqData.ownerEmail,
+        property_type: reqData.propertyType || 'apartment',
+        listing_type: reqData.listingType || 'sale',
+        city: reqData.city || 'Jammu',
+        locality: reqData.locality,
+        approx_price: reqData.approxPriceDisplay,
+        message: reqData.message,
+        status: 'New'
       })
       .select()
       .single();
 
-    if (imgErr) throw new Error(imgErr.message);
-    return imageRecord;
+    if (error) throw new Error(error.message);
+    return data;
+  },
+
+  fetchListingRequests: async () => {
+    if (!isSupabaseConfigured) return [];
+    const { data, error } = await supabase
+      .from('listing_requests')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) return [];
+    return data;
+  },
+
+  // BROKER LEADS & ASSIGNMENT API
+  assignLeadToBroker: async ({ customerId, brokerId, adminId, priority = 'high', adminNote = '' }) => {
+    if (!isSupabaseConfigured) return { success: true };
+    const { data, error } = await supabase
+      .from('broker_leads')
+      .insert({
+        customer_id: customerId,
+        broker_id: brokerId,
+        admin_id: adminId,
+        assigned_by: adminId,
+        priority,
+        admin_note: adminNote,
+        status: 'assigned'
+      })
+      .select()
+      .single();
+
+    if (error) throw new Error(error.message);
+    return data;
+  },
+
+  fetchAssignedBrokerLeads: async (brokerId) => {
+    if (!isSupabaseConfigured || !brokerId) return [];
+    const { data, error } = await supabase
+      .from('broker_leads')
+      .select(`
+        *,
+        customer:customer_id (id, full_name, email, phone, city),
+        property:property_id (id, title, locality, price)
+      `)
+      .eq('broker_id', brokerId)
+      .order('created_at', { ascending: false });
+
+    if (error) return [];
+    return data;
+  },
+
+  // AUDIT LOG API
+  addAdminAuditLog: async ({ adminId, action, targetType, targetId, metadata = {} }) => {
+    if (!isSupabaseConfigured || !adminId) return;
+    const { error } = await supabase
+      .from('admin_actions')
+      .insert({
+        admin_id: adminId,
+        action,
+        target_type: targetType,
+        target_id: targetId,
+        metadata
+      });
+
+    if (error) console.warn('Failed to insert audit log to Supabase:', error.message);
   },
 
   // FAVORITES API
@@ -374,7 +426,7 @@ export const supabaseService = {
       .from('favorites')
       .insert({ user_id: userId, property_id: propertyId });
 
-    if (error && error.code !== '23505') { // Ignore unique violation error
+    if (error && error.code !== '23505') {
       throw new Error(error.message);
     }
   },

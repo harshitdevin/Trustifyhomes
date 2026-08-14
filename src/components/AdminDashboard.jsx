@@ -39,7 +39,13 @@ import {
   Filter,
   UserX,
   UserCheck,
-  Sparkles
+  Sparkles,
+  Award,
+  ChevronRight,
+  Inbox,
+  UserPlus,
+  Edit,
+  Key
 } from 'lucide-react';
 import { dbService } from '../services/dbService';
 import { leadIntelligenceService } from '../services/leadIntelligenceService';
@@ -51,7 +57,7 @@ export default function AdminDashboard({
   activeTab: externalActiveTab,
   setActiveTab: externalSetActiveTab 
 }) {
-  const [internalActiveTab, setInternalActiveTab] = useState('home'); // home | statistics | customers | properties | pg | brokers | leads | enquiries | site_visits | verification | reports | payments | notifications | settings
+  const [internalActiveTab, setInternalActiveTab] = useState('home'); 
 
   const activeTab = externalActiveTab !== undefined ? externalActiveTab : internalActiveTab;
   const setActiveTab = externalSetActiveTab !== undefined ? externalSetActiveTab : setInternalActiveTab;
@@ -60,445 +66,394 @@ export default function AdminDashboard({
   const [brokersList, setBrokersList] = useState(() => dbService.getBrokersList());
   const [propertyList, setPropertyList] = useState(properties);
   const [leadList, setLeadList] = useState(() => dbService.getLeadMarketplace());
-  const [dealsList, setDealsList] = useState(() => dbService.getDeals());
   const [auditLogs, setAuditLogs] = useState(() => dbService.getAuditLogs());
   const [customersList, setCustomersList] = useState(() => dbService.getCustomers());
-  const [potentialCustomers, setPotentialCustomers] = useState(() => leadIntelligenceService.getPotentialCustomers());
-  const [assignedLeads, setAssignedLeads] = useState(() => leadIntelligenceService.getAssignedBrokerLeads());
   const [siteVisits, setSiteVisits] = useState(() => dbService.getSiteVisits());
   const [enquiriesList, setEnquiriesList] = useState(() => dbService.getEnquiriesList());
+  const [listingRequestsList, setListingRequestsList] = useState(() => dbService.getListingRequests());
 
   const [statusMessage, setStatusMessage] = useState('');
 
   // Filtering States
   const [customerSearchTerm, setCustomerSearchTerm] = useState('');
-  const [customerRoleFilter, setCustomerRoleFilter] = useState('all'); // all | buyer | owner | broker | student
-  const [propertyStatusFilter, setPropertyStatusFilter] = useState('all'); // all | pending | approved | rejected | suspended
+  const [customerStatusFilter, setCustomerStatusFilter] = useState('all'); 
+  const [propertyStatusFilter, setPropertyStatusFilter] = useState('all'); 
+  const [brokerStatusFilter, setBrokerStatusFilter] = useState('all');
+  const [leadStageFilter, setLeadStageFilter] = useState('all');
 
-  // Modal States
-  const [selectedScoreCustomer, setSelectedScoreCustomer] = useState(null);
-  const [assigningCustomer, setAssigningCustomer] = useState(null);
-  const [recommendedBrokers, setRecommendedBrokers] = useState([]);
-  const [selectedBrokerId, setSelectedBrokerId] = useState('');
-  const [assignAdminNote, setAssignAdminNote] = useState('');
-  const [assignPriority, setAssignPriority] = useState('high');
-
-  // Customer Detail Modal
+  // Modals & Action States
   const [selectedCustomerDetail, setSelectedCustomerDetail] = useState(null);
-
-  // Broker Detail Modal
   const [selectedBrokerDetail, setSelectedBrokerDetail] = useState(null);
+  const [isCreateBrokerOpen, setIsCreateBrokerOpen] = useState(false);
+  const [assigningLead, setAssigningLead] = useState(null);
 
-  // Action Handlers
-  const handleToggleBlacklist = (brokerId) => {
-    const updated = dbService.toggleBrokerBlacklist(brokerId);
+  // New Broker Form State
+  const [newBrokerName, setNewBrokerName] = useState('');
+  const [newBrokerAgency, setNewBrokerAgency] = useState('');
+  const [newBrokerPhone, setNewBrokerPhone] = useState('');
+  const [newBrokerEmail, setNewBrokerEmail] = useState('');
+  const [newBrokerRera, setNewBrokerRera] = useState('');
+  const [newBrokerLocality, setNewBrokerLocality] = useState('');
+
+  // Lead Assignment Form State
+  const [assignBrokerId, setAssignBrokerId] = useState('');
+  const [assignPriority, setAssignPriority] = useState('high');
+  const [assignAdminNote, setAssignAdminNote] = useState('');
+
+  // Calculated Real Summary Metrics (Zero Hardcoded Numbers)
+  const totalCustomersCount = customersList.length;
+  const activeCustomersCount = customersList.filter(c => c.accountStatus === 'Active' || !c.accountStatus).length;
+  const totalBrokersCount = brokersList.length;
+  const verifiedBrokersCount = brokersList.filter(b => b.verificationStatus === 'verified').length;
+  const pendingBrokersCount = brokersList.filter(b => b.verificationStatus === 'pending' || b.status === 'Pending').length;
+  
+  const totalPropertiesCount = propertyList.length;
+  const activePropertiesCount = propertyList.filter(p => p.status === 'Approved' || p.status === 'approved' || !p.status).length;
+  const pgListingsCount = propertyList.filter(p => p.listingType === 'pg' || p.propertyType === 'pg').length;
+  const activePgCount = propertyList.filter(p => (p.listingType === 'pg' || p.propertyType === 'pg') && (p.status === 'Approved' || p.status === 'approved' || !p.status)).length;
+  
+  const totalLeadsCount = leadList.length;
+  const highIntentLeadsCount = leadList.filter(l => l.priority === 'high' || l.priority === 'urgent' || (l.intentScore && l.intentScore >= 70)).length;
+  const openEnquiriesCount = enquiriesList.filter(e => e.status === 'New' || e.status === 'Contacted').length;
+  const pendingVisitsCount = siteVisits.filter(v => v.status === 'Requested').length;
+  const pendingRequestsCount = listingRequestsList.filter(r => r.status === 'New').length;
+
+  // Actions
+  const handleUpdateCustomerStatus = (customerId, newStatus) => {
+    const updated = dbService.updateCustomerAccountStatus(customerId, newStatus);
+    setCustomersList(updated);
+    if (selectedCustomerDetail && selectedCustomerDetail.id === customerId) {
+      setSelectedCustomerDetail({ ...selectedCustomerDetail, accountStatus: newStatus });
+    }
+    setStatusMessage(`Customer account status updated to ${newStatus}`);
+    setTimeout(() => setStatusMessage(''), 2500);
+  };
+
+  const handleCreateBroker = (e) => {
+    e.preventDefault();
+    if (!newBrokerName || !newBrokerPhone || !newBrokerEmail) {
+      alert('Please fill in required broker details.');
+      return;
+    }
+    const updated = dbService.createBroker({
+      name: newBrokerName,
+      agencyName: newBrokerAgency || `${newBrokerName} Realty`,
+      phone: newBrokerPhone,
+      email: newBrokerEmail,
+      reraId: newBrokerRera || 'JKRERA/JM/AGENT/2026',
+      locality: newBrokerLocality || 'Jammu',
+      isVerified: true
+    });
     setBrokersList(updated);
-    setAuditLogs(dbService.getAuditLogs());
-    setStatusMessage('Broker account status updated!');
+    setIsCreateBrokerOpen(false);
+    setNewBrokerName('');
+    setNewBrokerAgency('');
+    setNewBrokerPhone('');
+    setNewBrokerEmail('');
+    setNewBrokerRera('');
+    setNewBrokerLocality('');
+    setStatusMessage(`Created partner broker account for ${newBrokerName}`);
+    setTimeout(() => setStatusMessage(''), 2500);
+  };
+
+  const handleUpdateBrokerStatus = (brokerId, newStatus) => {
+    const updated = dbService.updateBrokerStatus(brokerId, newStatus);
+    setBrokersList(updated);
+    if (selectedBrokerDetail && selectedBrokerDetail.id === brokerId) {
+      setSelectedBrokerDetail({ ...selectedBrokerDetail, status: newStatus });
+    }
+    setStatusMessage(`Broker account status updated to ${newStatus}`);
     setTimeout(() => setStatusMessage(''), 2500);
   };
 
   const handleVerifyBrokerRera = (brokerId, isVerified) => {
     const updated = dbService.verifyBrokerRera(brokerId, isVerified);
     setBrokersList(updated);
-    setAuditLogs(dbService.getAuditLogs());
-    setStatusMessage(isVerified ? 'Broker RERA verified successfully!' : 'Broker verification rejected');
+    if (selectedBrokerDetail && selectedBrokerDetail.id === brokerId) {
+      setSelectedBrokerDetail({ ...selectedBrokerDetail, verificationStatus: isVerified ? 'verified' : 'rejected' });
+    }
+    setStatusMessage(`Updated broker RERA verification status`);
     setTimeout(() => setStatusMessage(''), 2500);
   };
 
-  const handleUpdateCustomerAccountStatus = (customerId, newStatus) => {
-    const updated = dbService.updateCustomerAccountStatus(customerId, newStatus);
-    setCustomersList(updated);
-    if (selectedCustomerDetail) setSelectedCustomerDetail({ ...selectedCustomerDetail, accountStatus: newStatus });
-    setStatusMessage(`Customer account status updated to ${newStatus}`);
-    setTimeout(() => setStatusMessage(''), 2500);
-  };
-
-  const handleUpdatePropertyApproval = (propId, newStatus) => {
-    const updated = propertyList.map(p => p.id === propId ? { ...p, status: newStatus } : p);
-    setPropertyList(updated);
-    dbService.addAuditLog('PROPERTY_STATUS_CHANGED', 'Admin', `Property ID ${propId} set to ${newStatus}`);
-    setAuditLogs(dbService.getAuditLogs());
-    setStatusMessage(`Property status set to ${newStatus}`);
-    setTimeout(() => setStatusMessage(''), 2500);
-  };
-
-  const handleOpenAssignModal = (customer) => {
-    if (!customer) return;
-    setAssigningCustomer(customer);
-    const recs = leadIntelligenceService.recommendBrokersForLead({
-      city: customer.city || 'Jammu',
-      locality: customer.locality || 'Gandhi Nagar',
-      propertyType: customer.propertyType || 'apartment'
-    });
-    const safeRecs = Array.isArray(recs) ? recs : [];
-    setRecommendedBrokers(safeRecs);
-    if (safeRecs.length > 0) setSelectedBrokerId(safeRecs[0].id);
-    setAssignAdminNote(`Potential customer for ${customer.locality || 'Jammu'} ${customer.propertyType || 'property'} (${customer.budgetDisplay || 'Standard'}). Intent score: ${customer.score || 75}/100.`);
-  };
-
-  const handleConfirmAssignLead = (e) => {
+  const handleAssignLeadSubmit = (e) => {
     e.preventDefault();
-    if (!assigningCustomer || !selectedBrokerId) return;
-
-    const updatedAssigned = leadIntelligenceService.assignLeadToBroker({
-      customerId: assigningCustomer.userId,
-      brokerId: selectedBrokerId,
-      propertyTitle: `${assigningCustomer.locality} ${assigningCustomer.propertyType}`,
-      adminNote: assignAdminNote,
-      priority: assignPriority
-    });
-
-    setAssignedLeads(updatedAssigned);
-    setAuditLogs(dbService.getAuditLogs());
-    setAssigningCustomer(null);
-    setStatusMessage(`Successfully assigned ${assigningCustomer.fullName} to selected broker!`);
+    if (!assigningLead || !assignBrokerId) {
+      alert('Please select a broker to assign.');
+      return;
+    }
+    const targetBroker = brokersList.find(b => b.id === assignBrokerId);
+    const updatedLeads = dbService.assignLeadToBroker(assigningLead.id, assignBrokerId, targetBroker ? targetBroker.name : 'Assigned Broker');
+    setLeadList(updatedLeads);
+    setAssigningLead(null);
+    setAssignBrokerId('');
+    setStatusMessage(`Lead assigned to ${targetBroker ? targetBroker.name : 'Broker'}`);
     setTimeout(() => setStatusMessage(''), 2500);
   };
 
-  // Filtered Lists
-  const filteredCustomers = customersList.filter(c => {
-    const matchesSearch = c.name.toLowerCase().includes(customerSearchTerm.toLowerCase()) || 
-                          c.email.toLowerCase().includes(customerSearchTerm.toLowerCase()) || 
-                          c.phone.includes(customerSearchTerm);
-    const matchesRole = customerRoleFilter === 'all' || c.role === customerRoleFilter;
-    return matchesSearch && matchesRole;
-  });
+  const handleUpdateListingRequestStatus = (reqId, newStatus) => {
+    const updated = dbService.updateListingRequestStatus(reqId, newStatus);
+    setListingRequestsList(updated);
+    setStatusMessage(`Listing request status updated to ${newStatus}`);
+    setTimeout(() => setStatusMessage(''), 2500);
+  };
 
-  const filteredProperties = propertyList.filter(p => {
-    if (propertyStatusFilter === 'all') return true;
-    if (propertyStatusFilter === 'pending') return p.status === 'Pending';
-    if (propertyStatusFilter === 'approved') return p.status === 'Approved' || !p.status;
-    if (propertyStatusFilter === 'rejected') return p.status === 'Rejected';
-    if (propertyStatusFilter === 'suspended') return p.status === 'Suspended';
+  const handleApproveProperty = (propId) => {
+    const updated = propertyList.map(p => p.id === propId ? { ...p, status: 'Approved' } : p);
+    setPropertyList(updated);
+    dbService.addAuditLog('PROPERTY_APPROVED', 'Admin', `Approved property listing ID: ${propId}`);
+    setStatusMessage('Property listing approved & published to public marketplace!');
+    setTimeout(() => setStatusMessage(''), 2500);
+  };
+
+  const handleRejectProperty = (propId) => {
+    const updated = propertyList.map(p => p.id === propId ? { ...p, status: 'Rejected' } : p);
+    setPropertyList(updated);
+    dbService.addAuditLog('PROPERTY_REJECTED', 'Admin', `Rejected property listing ID: ${propId}`);
+    setStatusMessage('Property listing rejected');
+    setTimeout(() => setStatusMessage(''), 2500);
+  };
+
+  // Filtered Datasets
+  const filteredCustomers = customersList.filter(c => {
+    if (customerStatusFilter !== 'all' && c.accountStatus !== customerStatusFilter) return false;
+    if (customerSearchTerm.trim() !== '') {
+      const q = customerSearchTerm.toLowerCase();
+      return c.name.toLowerCase().includes(q) || c.email.toLowerCase().includes(q) || c.phone.includes(q);
+    }
     return true;
   });
 
-  const pendingVerificationItems = [
-    ...brokersList.filter(b => b.verificationStatus === 'pending').map(b => ({ type: 'broker', title: b.agencyName, subtitle: `RERA: ${b.reraId}`, id: b.id })),
-    ...propertyList.filter(p => p.status === 'Pending').map(p => ({ type: 'property', title: p.title, subtitle: `${p.locality}, ${p.city}`, id: p.id }))
-  ];
+  const filteredBrokers = brokersList.filter(b => {
+    if (brokerStatusFilter !== 'all' && b.status !== brokerStatusFilter) return false;
+    return true;
+  });
 
-  const handleSendLeadToMarketplace = (customer, e) => {
-    if (e) {
-      e.preventDefault();
-      e.stopPropagation();
-    }
-    const newMarketplaceLead = {
-      id: `lead-mk-${Date.now()}`,
-      buyerName: customer.fullName,
-      buyerPhone: customer.phone || '+91 94191 88990',
-      locality: customer.locality,
-      city: customer.city || 'Jammu',
-      propertyType: customer.propertyType,
-      budgetDisplay: customer.budgetDisplay,
-      priceVal: customer.budgetMax || 15000000,
-      expectedCommissionRate: '1.5%',
-      estimatedCommissionVal: '₹2.50 Lac',
-      leadPriceTokens: customer.score >= 80 ? 500 : 350,
-      isPurchased: false,
-      purchasedBy: null,
-      inquiryDate: 'Just now',
-      note: `High-intent customer (${customer.score}/100 intent score) seeking ${customer.locality} ${customer.propertyType}.`
-    };
-
-    dbService.adminPostLead(newMarketplaceLead);
-    dbService.addAuditLog('LEAD_POSTED_TO_MARKETPLACE', 'Admin', `Published lead for ${customer.fullName} to open Marketplace`);
-    setAuditLogs(dbService.getAuditLogs());
-    setStatusMessage(`Published ${customer.fullName}'s lead to the open Broker Lead Marketplace!`);
-    setTimeout(() => setStatusMessage(''), 3000);
-  };
+  const filteredLeads = leadList.filter(l => {
+    if (leadStageFilter !== 'all' && l.status !== leadStageFilter) return false;
+    return true;
+  });
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
       
-      {/* Admin Master Header Banner */}
+      {/* Header Banner */}
       <div className="bg-purple-950 text-white rounded-xl p-5 shadow-md border border-purple-900 flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-4">
-          <div className="bg-purple-600 text-white p-3 rounded-xl">
-            <ShieldAlert className="w-7 h-7" />
+          <div className="bg-amber-400 text-purple-950 p-3 rounded-xl font-black">
+            <Building2 className="w-7 h-7" />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h2 className="text-xl sm:text-2xl font-extrabold tracking-tight">Trustify Homes Platform Control Center</h2>
-              <span className="bg-purple-600 text-white text-xs font-bold px-2 py-0.5 rounded">
-                Master Admin
+              <h2 className="text-xl sm:text-2xl font-extrabold tracking-tight">Trustify Operations Control Center</h2>
+              <span className="bg-emerald-500 text-slate-950 text-[10px] font-black px-2 py-0.5 rounded uppercase">
+                Phase 4 Active
               </span>
             </div>
             <p className="text-xs text-purple-200 mt-1">
-              Complete Business Operations • Statistics • Customers • Moderation • Verification Queue • Audits
+              Operational Management for Customers, Partner Brokers, Properties, PGs, Leads & Owner Requests
             </p>
           </div>
         </div>
 
         <div className="flex items-center gap-2">
           <button 
-            onClick={onOpenPostProperty}
-            className="ez-btn-outline border-purple-400 text-white hover:bg-purple-900 font-bold text-xs py-2 px-3"
+            onClick={() => setIsCreateBrokerOpen(true)}
+            className="bg-amber-400 hover:bg-amber-300 text-purple-950 font-extrabold text-xs px-3.5 py-2 rounded-lg flex items-center gap-1.5 transition-colors"
           >
-            <PlusCircle className="w-4 h-4" />
-            <span>Post Admin Listing</span>
+            <UserPlus className="w-4 h-4" />
+            <span>Create / Invite Broker</span>
+          </button>
+
+          <button 
+            onClick={onOpenPostProperty}
+            className="bg-purple-800 hover:bg-purple-700 text-white font-extrabold text-xs px-3.5 py-2 rounded-lg flex items-center gap-1.5 border border-purple-600 transition-colors"
+          >
+            <PlusCircle className="w-4 h-4 text-amber-400" />
+            <span>Add Property</span>
           </button>
         </div>
       </div>
 
       {statusMessage && (
-        <div className="bg-emerald-50 text-emerald-800 border border-emerald-300 px-4 py-2.5 rounded-lg text-xs font-bold flex items-center gap-2">
+        <div className="bg-emerald-50 text-emerald-900 border border-emerald-300 px-4 py-2.5 rounded-lg text-xs font-bold flex items-center gap-2">
           <Check className="w-4 h-4 text-emerald-600 shrink-0" />
           <span>{statusMessage}</span>
         </div>
       )}
 
-
-
-      {/* MODULE 1: ADMIN HOME OVERVIEW */}
+      {/* MODULE 1: DASHBOARD OVERVIEW */}
       {activeTab === 'home' && (
         <div className="space-y-6">
-          {/* Overview Cards */}
-          <div className="grid grid-cols-2 sm:grid-cols-6 gap-3">
+          {/* Real Metrics Cards Grid */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 gap-3">
             <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Total Customers</span>
-              <div className="text-2xl font-extrabold text-slate-900 mt-1">4,820</div>
-              <span className="text-[10px] text-emerald-600 font-semibold mt-1 block">+124 this week</span>
+              <div className="text-2xl font-extrabold text-slate-900 mt-1">{totalCustomersCount}</div>
+              <span className="text-[10px] font-semibold text-emerald-600 mt-1 block">{activeCustomersCount} Active Accounts</span>
             </div>
 
             <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
-              <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider block">Properties</span>
-              <div className="text-2xl font-extrabold text-emerald-700 mt-1">{propertyList.length + 1200}</div>
-              <span className="text-[10px] text-slate-500 mt-1 block">1,180 Approved</span>
+              <span className="text-[10px] font-bold text-purple-700 uppercase tracking-wider block">Partner Brokers</span>
+              <div className="text-2xl font-extrabold text-purple-950 mt-1">{totalBrokersCount}</div>
+              <span className="text-[10px] font-semibold text-purple-700 mt-1 block">{verifiedBrokersCount} RERA Verified</span>
             </div>
 
             <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
-              <span className="text-[10px] font-bold text-purple-600 uppercase tracking-wider block">Brokers</span>
-              <div className="text-2xl font-extrabold text-purple-800 mt-1">{brokersList.length + 80}</div>
-              <span className="text-[10px] text-purple-600 font-semibold mt-1 block">88% RERA Verified</span>
+              <span className="text-[10px] font-bold text-blue-600 uppercase tracking-wider block">Active Properties</span>
+              <div className="text-2xl font-extrabold text-brand-700 mt-1">{activePropertiesCount}</div>
+              <span className="text-[10px] text-slate-500 mt-1 block">{totalPropertiesCount} Total Listings</span>
             </div>
 
             <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
-              <span className="text-[10px] font-bold text-rose-600 uppercase tracking-wider block">PG Listings</span>
-              <div className="text-2xl font-extrabold text-rose-700 mt-1">412</div>
-              <span className="text-[10px] text-slate-500 mt-1 block">Students & Girls PGs</span>
+              <span className="text-[10px] font-bold text-amber-600 uppercase tracking-wider block">PG & Hostels</span>
+              <div className="text-2xl font-extrabold text-amber-700 mt-1">{activePgCount}</div>
+              <span className="text-[10px] text-slate-500 mt-1 block">{pgListingsCount} Total PG Listings</span>
             </div>
 
-            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
-              <span className="text-[10px] font-bold text-red-600 uppercase tracking-wider block flex items-center gap-1">
-                <Flame className="w-3 h-3 text-red-600 fill-red-600" /> Hot Leads
-              </span>
-              <div className="text-2xl font-extrabold text-red-600 mt-1">{potentialCustomers.filter(c => c.score >= 80).length + 60}</div>
-              <span className="text-[10px] text-slate-500 mt-1 block">Ready Homebuyers</span>
-            </div>
-
-            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
-              <span className="text-[10px] font-bold text-amber-600 uppercase tracking-wider block">Pending Review</span>
-              <div className="text-2xl font-extrabold text-amber-700 mt-1">{pendingVerificationItems.length + 22}</div>
-              <span className="text-[10px] text-amber-600 font-semibold mt-1 block">Requires Admin Moderation</span>
+            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs col-span-2 sm:col-span-1">
+              <span className="text-[10px] font-bold text-rose-600 uppercase tracking-wider block">Owner Requests</span>
+              <div className="text-2xl font-extrabold text-rose-700 mt-1">{pendingRequestsCount} New</div>
+              <span className="text-[10px] text-rose-600 font-semibold mt-1 block">Pending Owner Submissions</span>
             </div>
           </div>
 
-          {/* Activity Feeds */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="bg-white rounded-xl border border-slate-200 p-4 space-y-3">
-              <h4 className="text-sm font-extrabold text-slate-900 pb-2 border-b border-slate-200">
-                Recent System Activity
-              </h4>
-              <div className="space-y-2 text-xs">
-                <div className="p-2.5 bg-slate-50 border border-slate-200 rounded flex justify-between">
-                  <span>New Broker Registration: <strong>Col. Vikram Singh (Duggar Realty)</strong></span>
-                  <span className="text-[10px] text-slate-400">10 mins ago</span>
-                </div>
-                <div className="p-2.5 bg-slate-50 border border-slate-200 rounded flex justify-between">
-                  <span>High-Intent Lead Identified: <strong>Rahul Sharma (Gandhi Nagar)</strong></span>
-                  <span className="text-[10px] text-slate-400">25 mins ago</span>
-                </div>
-                <div className="p-2.5 bg-slate-50 border border-slate-200 rounded flex justify-between">
-                  <span>Site Visit Requested: <strong>Girls PG Channi Himmat</strong></span>
-                  <span className="text-[10px] text-slate-400">1 hour ago</span>
-                </div>
+          {/* Operational Pipeline Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div 
+              onClick={() => setActiveTab('listing_requests')}
+              className="bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 p-4 rounded-xl shadow-xs cursor-pointer hover:shadow-md transition-all flex items-center justify-between"
+            >
+              <div>
+                <span className="text-[10px] uppercase font-black tracking-wider block text-slate-900">Owner Listing Submissions</span>
+                <div className="text-2xl font-black">{pendingRequestsCount} Pending Submissions</div>
+                <p className="text-xs font-semibold mt-1">Review owner properties & publish →</p>
               </div>
+              <Inbox className="w-10 h-10 opacity-80" />
             </div>
 
-            <div className="bg-white rounded-xl border border-slate-200 p-4 space-y-3">
-              <h4 className="text-sm font-extrabold text-slate-900 pb-2 border-b border-slate-200">
-                Pending Verification Queue
-              </h4>
-              <div className="space-y-2 text-xs">
-                {pendingVerificationItems.map((item, idx) => (
-                  <div key={idx} className="p-2.5 bg-amber-50/60 border border-amber-200 rounded flex items-center justify-between">
-                    <div>
-                      <div className="font-extrabold text-slate-900">{item.title}</div>
-                      <div className="text-[11px] text-slate-600">{item.subtitle}</div>
-                    </div>
-                    <button 
-                      onClick={() => setActiveTab('verification')}
-                      className="px-2.5 py-1 bg-purple-950 text-white rounded text-[10px] font-bold"
-                    >
-                      Review
-                    </button>
-                  </div>
-                ))}
+            <div 
+              onClick={() => setActiveTab('leads')}
+              className="bg-gradient-to-r from-purple-900 to-purple-950 text-white p-4 rounded-xl shadow-xs cursor-pointer hover:shadow-md transition-all flex items-center justify-between"
+            >
+              <div>
+                <span className="text-[10px] uppercase font-bold tracking-wider block text-purple-300">Lead Assignment Queue</span>
+                <div className="text-2xl font-black">{totalLeadsCount} Total Leads ({highIntentLeadsCount} High Intent)</div>
+                <p className="text-xs font-semibold mt-1 text-purple-200">Assign leads to verified brokers →</p>
               </div>
+              <Send className="w-10 h-10 text-amber-400 opacity-80" />
+            </div>
+
+            <div 
+              onClick={() => setActiveTab('site_visits')}
+              className="bg-slate-900 text-white p-4 rounded-xl shadow-xs cursor-pointer hover:shadow-md transition-all flex items-center justify-between"
+            >
+              <div>
+                <span className="text-[10px] uppercase font-bold tracking-wider block text-slate-400">Site Visit Requests</span>
+                <div className="text-2xl font-black">{pendingVisitsCount} Slots Pending</div>
+                <p className="text-xs font-semibold mt-1 text-slate-300">Manage physical site visit slots →</p>
+              </div>
+              <Calendar className="w-10 h-10 text-purple-400 opacity-80" />
             </div>
           </div>
         </div>
       )}
 
-      {/* MODULE 2: PLATFORM STATISTICS (/admin/statistics) */}
-      {activeTab === 'statistics' && (
-        <div className="space-y-6">
-          <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs space-y-6">
-            <h3 className="text-base font-extrabold text-slate-900 pb-3 border-b border-slate-200">
-              Platform Analytics & User Statistics
-            </h3>
-
-            {/* User Statistics Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 text-xs font-semibold">
-              <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
-                <span className="text-slate-400 uppercase text-[10px] block">Buyers & Tenants</span>
-                <span className="text-2xl font-extrabold text-brand-700">3,420 Users</span>
-                <span className="text-[10px] text-slate-500 mt-1 block">71% of total user base</span>
-              </div>
-              <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
-                <span className="text-slate-400 uppercase text-[10px] block">Students (PG Seekers)</span>
-                <span className="text-2xl font-extrabold text-emerald-700">890 Students</span>
-                <span className="text-[10px] text-slate-500 mt-1 block">18% of total user base</span>
-              </div>
-              <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
-                <span className="text-slate-400 uppercase text-[10px] block">Property Owners</span>
-                <span className="text-2xl font-extrabold text-amber-700">427 Owners</span>
-                <span className="text-[10px] text-slate-500 mt-1 block">Direct zero-fee listings</span>
-              </div>
-              <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
-                <span className="text-slate-400 uppercase text-[10px] block">Verified Brokers</span>
-                <span className="text-2xl font-extrabold text-purple-800">83 Agencies</span>
-                <span className="text-[10px] text-slate-500 mt-1 block">88% RERA Verified</span>
-              </div>
-            </div>
-
-            {/* Lead Funnel Statistics */}
-            <div className="bg-slate-50 p-5 rounded-xl border border-slate-200 space-y-3">
-              <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider">Overall Platform Lead Funnel</h4>
-              <div className="space-y-2 text-xs font-bold">
-                <div className="flex items-center gap-3">
-                  <span className="w-32 text-slate-600">Potential Customers</span>
-                  <div className="flex-1 bg-slate-200 h-5 rounded overflow-hidden">
-                    <div className="bg-slate-800 h-full text-white text-[10px] px-2 flex items-center" style={{ width: '100%' }}>126 Customers</div>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className="w-32 text-slate-600">Assigned Leads</span>
-                  <div className="flex-1 bg-slate-200 h-5 rounded overflow-hidden">
-                    <div className="bg-blue-600 h-full text-white text-[10px] px-2 flex items-center" style={{ width: '65%' }}>82 Leads</div>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className="w-32 text-slate-600">Site Visits</span>
-                  <div className="flex-1 bg-slate-200 h-5 rounded overflow-hidden">
-                    <div className="bg-purple-600 h-full text-white text-[10px] px-2 flex items-center" style={{ width: '38%' }}>48 Visits</div>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className="w-32 text-slate-600">Converted Deals</span>
-                  <div className="flex-1 bg-slate-200 h-5 rounded overflow-hidden">
-                    <div className="bg-emerald-600 h-full text-white text-[10px] px-2 flex items-center" style={{ width: '22%' }}>28 Deals (22.2%)</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Revenue Analytics Placeholder */}
-            <div className="bg-amber-50 p-4 rounded-xl border border-amber-200 text-amber-900 text-xs font-semibold">
-              <strong>Revenue Analytics Note:</strong> Financial and transaction revenue statistics will automatically activate when platform monetization features (featured listings & lead packs) are launched.
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* MODULE 3: CUSTOMER MANAGEMENT (/admin/customers) */}
+      {/* MODULE 2: CUSTOMERS CONTROL (/admin/customers) */}
       {activeTab === 'customers' && (
         <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-4 pb-3 border-b border-slate-200">
             <div>
-              <h3 className="text-base font-extrabold text-slate-900">Customer & Account Directory</h3>
-              <p className="text-xs text-slate-500">Manage buyers, tenants, and verified real estate brokers</p>
+              <h3 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
+                <Users className="w-5 h-5 text-brand-600" />
+                Customer User Directory ({filteredCustomers.length})
+              </h3>
+              <p className="text-xs text-slate-500">Manage registered students, buyers, and property seekers</p>
             </div>
 
-            {/* Search & Role Filters */}
-            <div className="flex flex-wrap gap-2 text-xs">
-              <input 
-                type="text" 
-                placeholder="Search name, phone, email..."
-                value={customerSearchTerm}
-                onChange={(e) => setCustomerSearchTerm(e.target.value)}
-                className="bg-slate-50 border border-slate-300 rounded px-3 py-1.5 font-semibold text-slate-900 text-xs"
-              />
-              <select
-                value={customerRoleFilter}
-                onChange={(e) => setCustomerRoleFilter(e.target.value)}
-                className="bg-slate-50 border border-slate-300 rounded px-3 py-1.5 font-bold text-slate-900 text-xs"
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="relative">
+                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
+                <input 
+                  type="text"
+                  placeholder="Search name, phone, email..."
+                  value={customerSearchTerm}
+                  onChange={(e) => setCustomerSearchTerm(e.target.value)}
+                  className="bg-slate-50 border border-slate-300 rounded-md pl-8 pr-3 py-1.5 text-xs text-slate-900 w-48 focus:outline-none"
+                />
+              </div>
+
+              <select 
+                value={customerStatusFilter}
+                onChange={(e) => setCustomerStatusFilter(e.target.value)}
+                className="bg-slate-50 border border-slate-300 rounded-md px-3 py-1.5 text-xs font-bold text-slate-800"
               >
-                <option value="all">All Roles</option>
-                <option value="buyer">Buyers / Tenants</option>
-                <option value="broker">Brokers / Agencies</option>
+                <option value="all">All Account Statuses</option>
+                <option value="Active">Active</option>
+                <option value="Suspended">Suspended</option>
+                <option value="Blocked">Blocked</option>
               </select>
             </div>
           </div>
 
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
+            <table className="w-full text-left border-collapse text-xs">
               <thead>
-                <tr className="border-b border-slate-200 text-slate-400 uppercase tracking-wider text-[10px]">
-                  <th className="pb-3 font-bold">Customer Name</th>
-                  <th className="pb-3 font-bold">Role & City</th>
-                  <th className="pb-3 font-bold">Contact Details</th>
-                  <th className="pb-3 font-bold">Intent Score</th>
-                  <th className="pb-3 font-bold">Account Status</th>
-                  <th className="pb-3 font-bold text-right">Actions</th>
+                <tr className="bg-slate-100 border-b border-slate-200 text-[10px] font-bold text-slate-500 uppercase">
+                  <th className="p-3">Customer Name</th>
+                  <th className="p-3">Contact</th>
+                  <th className="p-3">City</th>
+                  <th className="p-3">Reg. Date</th>
+                  <th className="p-3">Intent Score</th>
+                  <th className="p-3">Account Status</th>
+                  <th className="p-3 text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 font-semibold text-slate-700">
-                {filteredCustomers.map((cust) => (
-                  <tr key={cust.id} className="hover:bg-slate-50">
-                    <td className="py-3">
-                      <div className="font-extrabold text-slate-900">{cust.name}</div>
-                      <div className="text-[11px] text-slate-500">Last active {cust.lastActive}</div>
-                    </td>
-                    <td className="py-3">
-                      <span className="uppercase text-[10px] font-extrabold bg-slate-100 px-2 py-0.5 rounded text-slate-700">
-                        {cust.role}
-                      </span>
-                      <div className="text-[11px] text-slate-500 mt-0.5">{cust.city}</div>
-                    </td>
-                    <td className="py-3">
-                      <div>{cust.phone}</div>
-                      <div className="text-[11px] text-slate-500">{cust.email}</div>
-                    </td>
-                    <td className="py-3">
-                      <span className="bg-red-100 text-red-800 text-[10px] font-extrabold px-2 py-0.5 rounded">
-                        Score: {cust.intentScore || 75}/100
+              <tbody className="divide-y divide-slate-200">
+                {filteredCustomers.map(cust => (
+                  <tr key={cust.id} className="hover:bg-slate-50 font-semibold">
+                    <td className="p-3 font-extrabold text-slate-900">{cust.name}</td>
+                    <td className="p-3 text-slate-600">{cust.phone} <br/><span className="text-[10px] font-mono text-slate-400">{cust.email}</span></td>
+                    <td className="p-3 text-slate-700">{cust.city}</td>
+                    <td className="p-3 text-slate-500">{cust.registrationDate || '10 Aug 2026'}</td>
+                    <td className="p-3">
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-extrabold ${
+                        cust.intentScore >= 80 ? 'bg-red-100 text-red-800' : 'bg-amber-100 text-amber-900'
+                      }`}>
+                        {cust.intentScore || 70}/100 ({cust.intentLevel || 'high'})
                       </span>
                     </td>
-                    <td className="py-3">
-                      <span className={`px-2 py-0.5 rounded text-[11px] font-bold ${
-                        cust.accountStatus === 'Suspended' ? 'bg-red-100 text-red-800' : 'bg-emerald-100 text-emerald-800'
+                    <td className="p-3">
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-extrabold uppercase ${
+                        cust.accountStatus === 'Active' || !cust.accountStatus ? 'bg-emerald-100 text-emerald-800' :
+                        cust.accountStatus === 'Suspended' ? 'bg-amber-100 text-amber-900' : 'bg-red-100 text-red-800'
                       }`}>
                         {cust.accountStatus || 'Active'}
                       </span>
                     </td>
-                    <td className="py-3 text-right space-x-1">
-                      <button
+                    <td className="p-3 text-right space-x-1.5">
+                      <button 
                         onClick={() => setSelectedCustomerDetail(cust)}
-                        className="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded font-bold"
+                        className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 rounded text-slate-800 text-[11px] font-bold"
                       >
                         Details
                       </button>
-                      <button
-                        onClick={() => handleUpdateCustomerAccountStatus(cust.id, cust.accountStatus === 'Suspended' ? 'Active' : 'Suspended')}
-                        className={`px-2 py-1 rounded font-bold ${
-                          cust.accountStatus === 'Suspended' ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'
-                        }`}
-                      >
-                        {cust.accountStatus === 'Suspended' ? 'Unsuspend' : 'Suspend'}
-                      </button>
+
+                      {cust.accountStatus === 'Suspended' || cust.accountStatus === 'Blocked' ? (
+                        <button 
+                          onClick={() => handleUpdateCustomerStatus(cust.id, 'Active')}
+                          className="px-2.5 py-1 bg-emerald-100 text-emerald-800 hover:bg-emerald-200 rounded text-[11px] font-bold"
+                        >
+                          Reactivate
+                        </button>
+                      ) : (
+                        <button 
+                          onClick={() => handleUpdateCustomerStatus(cust.id, 'Suspended')}
+                          className="px-2.5 py-1 bg-amber-100 text-amber-900 hover:bg-amber-200 rounded text-[11px] font-bold"
+                        >
+                          Suspend
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -508,103 +463,257 @@ export default function AdminDashboard({
         </div>
       )}
 
-      {/* CUSTOMER DETAIL MODAL */}
-      {selectedCustomerDetail && (
-        <div className="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 relative text-xs">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-200 mb-4">
-              <h3 className="text-base font-extrabold text-slate-900">Customer Profile — {selectedCustomerDetail.name}</h3>
-              <button onClick={() => setSelectedCustomerDetail(null)} className="p-1 text-slate-400 hover:text-slate-700">
-                <X className="w-5 h-5" />
-              </button>
+      {/* MODULE 3: BROKERS CONTROL (/admin/brokers) */}
+      {activeTab === 'brokers' && (
+        <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-4 pb-3 border-b border-slate-200">
+            <div>
+              <h3 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
+                <Briefcase className="w-5 h-5 text-purple-700" />
+                Partner Brokers Directory ({filteredBrokers.length})
+              </h3>
+              <p className="text-xs text-slate-500">Manage registered real estate dealers & student housing partners</p>
             </div>
 
-            <div className="space-y-3 font-semibold text-slate-700">
-              <div className="bg-slate-50 p-3 rounded-lg border border-slate-200 grid grid-cols-2 gap-2">
-                <div>
-                  <span className="text-slate-400 text-[10px] block uppercase">Role</span>
-                  <span className="font-extrabold uppercase text-brand-700">{selectedCustomerDetail.role}</span>
-                </div>
-                <div>
-                  <span className="text-slate-400 text-[10px] block uppercase">Account Status</span>
-                  <span className="font-extrabold text-emerald-700">{selectedCustomerDetail.accountStatus || 'Active'}</span>
-                </div>
-                <div>
-                  <span className="text-slate-400 text-[10px] block uppercase">Phone</span>
-                  <span>{selectedCustomerDetail.phone}</span>
-                </div>
-                <div>
-                  <span className="text-slate-400 text-[10px] block uppercase">Email</span>
-                  <span>{selectedCustomerDetail.email}</span>
-                </div>
-              </div>
+            <button 
+              onClick={() => setIsCreateBrokerOpen(true)}
+              className="bg-purple-950 hover:bg-purple-900 text-white font-extrabold text-xs px-3.5 py-2 rounded-lg flex items-center gap-1.5"
+            >
+              <UserPlus className="w-4 h-4 text-amber-400" />
+              <span>Create / Invite Broker</span>
+            </button>
+          </div>
 
-              <div className="bg-red-50 p-3 rounded-lg border border-red-200 flex justify-between items-center">
-                <div>
-                  <span className="text-red-900 font-extrabold text-sm block">Customer Intent Score</span>
-                  <span className="text-slate-600 text-[11px]">Calculated from first-party in-app activity</span>
-                </div>
-                <span className="text-xl font-extrabold text-red-600">{selectedCustomerDetail.intentScore || 87}/100</span>
-              </div>
-            </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse text-xs">
+              <thead>
+                <tr className="bg-slate-100 border-b border-slate-200 text-[10px] font-bold text-slate-500 uppercase">
+                  <th className="p-3">Broker & Agency</th>
+                  <th className="p-3">Contact</th>
+                  <th className="p-3">RERA Reg ID</th>
+                  <th className="p-3">RERA Status</th>
+                  <th className="p-3">Assigned Leads</th>
+                  <th className="p-3">Account Status</th>
+                  <th className="p-3 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-200">
+                {filteredBrokers.map(brk => (
+                  <tr key={brk.id} className="hover:bg-slate-50 font-semibold">
+                    <td className="p-3">
+                      <div className="font-extrabold text-slate-900">{brk.name}</div>
+                      <div className="text-[10px] text-slate-500">{brk.agencyName}</div>
+                    </td>
+                    <td className="p-3 text-slate-600">{brk.phone} <br/><span className="text-[10px] font-mono text-slate-400">{brk.email}</span></td>
+                    <td className="p-3 font-mono text-emerald-800">{brk.reraId}</td>
+                    <td className="p-3">
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-extrabold ${
+                        brk.verificationStatus === 'verified' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-900'
+                      }`}>
+                        {brk.verificationStatus}
+                      </span>
+                    </td>
+                    <td className="p-3 font-bold text-slate-800">{brk.assignedLeadsCount || 8} Leads</td>
+                    <td className="p-3">
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-extrabold uppercase ${
+                        brk.status === 'Active' ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'
+                      }`}>
+                        {brk.status}
+                      </span>
+                    </td>
+                    <td className="p-3 text-right space-x-1.5">
+                      <button 
+                        onClick={() => setSelectedBrokerDetail(brk)}
+                        className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 rounded text-slate-800 text-[11px] font-bold"
+                      >
+                        Details
+                      </button>
+
+                      {brk.verificationStatus !== 'verified' && (
+                        <button 
+                          onClick={() => handleVerifyBrokerRera(brk.id, true)}
+                          className="px-2.5 py-1 bg-emerald-600 text-white hover:bg-emerald-700 rounded text-[11px] font-bold"
+                        >
+                          Verify RERA
+                        </button>
+                      )}
+
+                      {brk.status === 'Active' ? (
+                        <button 
+                          onClick={() => handleUpdateBrokerStatus(brk.id, 'Suspended')}
+                          className="px-2.5 py-1 bg-red-100 text-red-800 hover:bg-red-200 rounded text-[11px] font-bold"
+                        >
+                          Suspend
+                        </button>
+                      ) : (
+                        <button 
+                          onClick={() => handleUpdateBrokerStatus(brk.id, 'Active')}
+                          className="px-2.5 py-1 bg-emerald-100 text-emerald-800 hover:bg-emerald-200 rounded text-[11px] font-bold"
+                        >
+                          Reactivate
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
       )}
 
-      {/* MODULE 4: PROPERTY MODERATION (/admin/properties) */}
-      {activeTab === 'properties' && (
+      {/* MODULE 4: OWNER LISTING REQUESTS (/admin/listing-requests) */}
+      {activeTab === 'listing_requests' && (
+        <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs space-y-4">
+          <div className="flex items-center justify-between pb-3 border-b border-slate-200">
+            <div>
+              <h3 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
+                <Inbox className="w-5 h-5 text-amber-600" />
+                Owner Property Listing Submissions ({listingRequestsList.length})
+              </h3>
+              <p className="text-xs text-slate-500">Property submissions from owners contacting Trustify ("List Your Property")</p>
+            </div>
+            <span className="bg-amber-100 text-amber-900 text-xs font-bold px-2.5 py-1 rounded border border-amber-300">
+              {pendingRequestsCount} Pending Review
+            </span>
+          </div>
+
+          <div className="space-y-3">
+            {listingRequestsList.map(req => (
+              <div key={req.id} className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-3 text-xs">
+                <div className="flex flex-wrap justify-between items-start gap-2">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h4 className="font-extrabold text-slate-900 text-sm">{req.ownerName}</h4>
+                      <span className="bg-blue-100 text-brand-800 text-[10px] font-bold px-2 py-0.5 rounded uppercase">
+                        {req.listingType} • {req.propertyType}
+                      </span>
+                    </div>
+                    <p className="text-slate-600 font-semibold mt-0.5">
+                      Locality: <strong className="text-slate-900">{req.locality}, {req.city}</strong> • Price: <strong className="text-emerald-700">{req.approxPriceDisplay}</strong>
+                    </p>
+                    <p className="text-slate-700 mt-1 font-mono">
+                      Phone: <strong>{req.ownerPhone}</strong> ({req.ownerEmail || 'No email'})
+                    </p>
+                  </div>
+
+                  <span className={`px-2.5 py-1 rounded text-xs font-extrabold uppercase ${
+                    req.status === 'New' ? 'bg-amber-100 text-amber-900 border border-amber-300' : 'bg-emerald-100 text-emerald-800'
+                  }`}>
+                    {req.status}
+                  </span>
+                </div>
+
+                <p className="bg-white p-3 rounded border border-slate-200 text-slate-700 leading-relaxed font-normal">
+                  <strong>Owner Note:</strong> "{req.message || 'No additional message.'}"
+                </p>
+
+                {/* Actions */}
+                <div className="pt-2 border-t border-slate-200 flex flex-wrap items-center justify-between gap-2 font-bold">
+                  <a 
+                    href={`tel:${req.ownerPhone}`}
+                    className="px-3 py-1.5 bg-brand-700 text-white rounded text-xs flex items-center gap-1"
+                  >
+                    Call Owner ({req.ownerPhone})
+                  </a>
+
+                  <div className="flex items-center gap-2">
+                    <button 
+                      onClick={() => {
+                        handleUpdateListingRequestStatus(req.id, 'Verified & Created');
+                        onOpenPostProperty();
+                      }}
+                      className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-xs"
+                    >
+                      Publish Listing to Marketplace
+                    </button>
+                    <button 
+                      onClick={() => handleUpdateListingRequestStatus(req.id, 'Rejected')}
+                      className="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-800 rounded text-xs"
+                    >
+                      Reject Request
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* MODULE 5: LEADS CONTROL (/admin/leads) */}
+      {activeTab === 'leads' && (
         <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-4 pb-3 border-b border-slate-200">
             <div>
-              <h3 className="text-base font-extrabold text-slate-900">Platform Property Moderation ({filteredProperties.length})</h3>
-              <p className="text-xs text-slate-500">Approve, reject, feature, or suspend real estate listings</p>
+              <h3 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
+                <Activity className="w-5 h-5 text-purple-700" />
+                Central Lead Pipeline & Broker Assignment Queue
+              </h3>
+              <p className="text-xs text-slate-500">Operational lead assignment pipeline: Customer → Admin → Assigned Broker</p>
             </div>
 
-            <div className="flex gap-1.5 text-xs font-bold">
-              {['all', 'pending', 'approved', 'rejected', 'suspended'].map(filterKey => (
+            {/* Stage Filter */}
+            <div className="flex flex-wrap gap-1 text-xs font-bold">
+              {['all', 'assigned', 'contacted', 'follow_up', 'site_visit', 'negotiation', 'converted'].map(stage => (
                 <button
-                  key={filterKey}
-                  onClick={() => setPropertyStatusFilter(filterKey)}
-                  className={`px-3 py-1 rounded text-[10px] uppercase ${
-                    propertyStatusFilter === filterKey ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700'
+                  key={stage}
+                  onClick={() => setLeadStageFilter(stage)}
+                  className={`px-2.5 py-1 rounded text-[10px] uppercase transition-all ${
+                    leadStageFilter === stage ? 'bg-purple-950 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                   }`}
                 >
-                  {filterKey}
+                  {stage.replace('_', ' ')}
                 </button>
               ))}
             </div>
           </div>
 
           <div className="space-y-3">
-            {filteredProperties.map(prop => (
-              <div key={prop.id} className="p-3 bg-slate-50 border border-slate-200 rounded-xl flex flex-wrap items-center justify-between gap-4 text-xs">
-                <div className="flex items-center gap-3">
-                  <img src={prop.image} alt={prop.title} className="w-14 h-14 rounded object-cover border border-slate-200" />
+            {filteredLeads.map(lead => (
+              <div key={lead.id} className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-3 text-xs">
+                <div className="flex flex-wrap justify-between items-start gap-2">
                   <div>
-                    <h4 className="font-extrabold text-slate-900">{prop.title}</h4>
-                    <p className="text-slate-600">{prop.locality}, Jammu • <strong className="text-emerald-700">{prop.price || prop.priceDisplay}</strong></p>
+                    <div className="flex items-center gap-2">
+                      <h4 className="font-extrabold text-slate-900 text-sm">{lead.customerName}</h4>
+                      <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded uppercase ${
+                        lead.priority === 'urgent' || lead.priority === 'high' ? 'bg-red-100 text-red-800' : 'bg-amber-100 text-amber-900'
+                      }`}>
+                        {lead.priority || 'high'} priority
+                      </span>
+                      <span className="bg-blue-100 text-brand-800 text-[10px] font-extrabold px-2 py-0.5 rounded">
+                        Intent Score: {lead.intentScore || 75}/100
+                      </span>
+                    </div>
+                    <p className="text-slate-600 font-semibold mt-1">
+                      Requirement: <strong className="text-slate-900">{lead.locality} ({lead.propertyType ? lead.propertyType.toUpperCase() : 'APARTMENT'})</strong> • Budget: <strong className="text-emerald-700">{lead.budgetDisplay}</strong>
+                    </p>
+                    <p className="text-slate-700 mt-1 font-mono">Phone: {lead.customerPhone}</p>
+                  </div>
+
+                  <div className="text-right">
+                    <span className="text-[10px] text-slate-400 font-bold block mb-1">Assigned Partner Broker:</span>
+                    <span className="font-extrabold text-purple-950 bg-purple-100 px-2.5 py-1 rounded border border-purple-200">
+                      {lead.assignedBrokerName || 'Unassigned'}
+                    </span>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2">
-                  <span className={`px-2 py-0.5 rounded text-[10px] font-extrabold uppercase ${
-                    prop.status === 'Approved' ? 'bg-emerald-100 text-emerald-800' :
-                    prop.status === 'Rejected' ? 'bg-red-100 text-red-800' : 'bg-amber-100 text-amber-900'
-                  }`}>
-                    {prop.status || 'Approved'}
-                  </span>
+                {lead.adminNote && (
+                  <div className="bg-amber-50 text-amber-900 text-xs p-2.5 rounded border border-amber-200">
+                    <strong>Admin Note:</strong> {lead.adminNote}
+                  </div>
+                )}
 
+                {/* Actions */}
+                <div className="pt-2 border-t border-slate-200 flex flex-wrap items-center justify-between gap-2 text-xs font-bold">
+                  <span className="text-slate-500 uppercase text-[10px]">Pipeline Stage: {lead.status}</span>
                   <button 
-                    onClick={() => handleUpdatePropertyApproval(prop.id, 'Approved')}
-                    className="px-2.5 py-1 bg-emerald-600 text-white rounded font-bold text-[11px]"
+                    onClick={() => setAssigningLead(lead)}
+                    className="px-3 py-1.5 bg-purple-950 hover:bg-purple-900 text-white rounded text-xs flex items-center gap-1"
                   >
-                    Approve
-                  </button>
-                  <button 
-                    onClick={() => handleUpdatePropertyApproval(prop.id, 'Rejected')}
-                    className="px-2.5 py-1 bg-red-600 text-white rounded font-bold text-[11px]"
-                  >
-                    Reject
+                    <Send className="w-3.5 h-3.5 text-amber-400" />
+                    <span>{lead.assignedBrokerId ? 'Reassign Broker' : 'Assign Broker'}</span>
                   </button>
                 </div>
               </div>
@@ -613,291 +722,334 @@ export default function AdminDashboard({
         </div>
       )}
 
-      {/* MODULE 5: BROKER MANAGEMENT & VERIFICATION (/admin/brokers) */}
-      {activeTab === 'brokers' && (
-        <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs space-y-4">
-          <div className="flex items-center justify-between pb-3 border-b border-slate-200">
-            <h3 className="text-base font-extrabold text-slate-900">Broker & Agency Registry</h3>
-            <span className="text-xs font-bold text-slate-500">{brokersList.length} Registered Agencies</span>
-          </div>
-
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead>
-                <tr className="border-b border-slate-200 text-slate-400 uppercase tracking-wider text-[10px]">
-                  <th className="pb-3 font-bold">Broker Agency</th>
-                  <th className="pb-3 font-bold">RERA Number</th>
-                  <th className="pb-3 font-bold">RERA Status</th>
-                  <th className="pb-3 font-bold">Account Status</th>
-                  <th className="pb-3 font-bold text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 font-semibold text-slate-700">
-                {brokersList.map(b => (
-                  <tr key={b.id}>
-                    <td className="py-3">
-                      <div className="font-extrabold text-slate-900">{b.name}</div>
-                      <div className="text-[11px] text-slate-500">{b.agencyName} ({b.locality})</div>
-                    </td>
-                    <td className="py-3 font-mono text-emerald-800">{b.reraId}</td>
-                    <td className="py-3">
-                      <span className={`px-2 py-0.5 rounded text-[10px] font-extrabold uppercase ${
-                        b.verificationStatus === 'verified' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-900'
-                      }`}>
-                        {b.verificationStatus || 'verified'}
-                      </span>
-                    </td>
-                    <td className="py-3">
-                      <span className={`px-2 py-0.5 rounded text-[10px] font-extrabold uppercase ${
-                        b.status === 'Active' ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'
-                      }`}>
-                        {b.status}
-                      </span>
-                    </td>
-                    <td className="py-3 text-right space-x-1">
-                      <button
-                        onClick={() => handleVerifyBrokerRera(b.id, b.verificationStatus !== 'verified')}
-                        className="px-2 py-1 bg-emerald-50 text-emerald-800 rounded font-bold"
-                      >
-                        {b.verificationStatus === 'verified' ? 'Revoke RERA' : 'Verify RERA'}
-                      </button>
-                      <button
-                        onClick={() => handleToggleBlacklist(b.id)}
-                        className={`px-2 py-1 rounded font-bold ${
-                          b.status === 'Active' ? 'bg-red-50 text-red-700' : 'bg-emerald-50 text-emerald-700'
-                        }`}
-                      >
-                        {b.status === 'Active' ? 'Blacklist' : 'Activate'}
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {/* MODULE 6: LEAD INTELLIGENCE (/admin/leads) */}
-      {activeTab === 'leads' && (
-        <div className="space-y-4">
-          <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs">
-            <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-slate-200 mb-4">
-              <div>
-                <h3 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
-                  <Flame className="w-5 h-5 text-red-600 fill-red-600" />
-                  First-Party Customer Intent Leaderboard
-                </h3>
-                <p className="text-xs text-slate-500">Recency-weighted 0-100 score calculated from in-app search, view & save events</p>
-              </div>
-            </div>
-
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead>
-                  <tr className="border-b border-slate-200 text-slate-400 uppercase tracking-wider text-[10px]">
-                    <th className="pb-3 font-bold">Potential Customer</th>
-                    <th className="pb-3 font-bold">Intent Score & Level</th>
-                    <th className="pb-3 font-bold">Requirement</th>
-                    <th className="pb-3 font-bold text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 font-semibold text-slate-700">
-                  {potentialCustomers && potentialCustomers.map((cust) => (
-                    <tr key={cust.userId || cust.id || Math.random()} className="hover:bg-slate-50">
-                      <td className="py-3">
-                        <div className="font-extrabold text-slate-900">{cust.fullName || cust.name || 'Customer'} ({cust.role || 'buyer'})</div>
-                        <div className="text-[11px] text-slate-500">{cust.city || 'Jammu'} • Last active {cust.lastActivityAt || 'Recently'}</div>
-                      </td>
-                      <td className="py-3">
-                        <span className="bg-red-100 text-red-800 text-xs font-extrabold px-2.5 py-1 rounded">
-                          Score: {cust.score !== undefined ? cust.score : 75}/100
-                        </span>
-                      </td>
-                      <td className="py-3">
-                        <div>{cust.locality || 'Jammu'} ({(cust.propertyType || 'property').toUpperCase()})</div>
-                        <div className="text-[11px] text-slate-500">{cust.budgetDisplay || 'Standard Budget'}</div>
-                      </td>
-                      <td className="py-3 text-right space-x-1.5 whitespace-nowrap">
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            handleOpenAssignModal(cust);
-                          }}
-                          className="px-2.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded font-bold text-[11px] inline-flex items-center gap-1 shadow-xs"
-                          title="Assign lead directly to a specific verified broker"
-                        >
-                          <UserCheck className="w-3.5 h-3.5" />
-                          <span>Send to Specified Broker</span>
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            handleSendLeadToMarketplace(cust, e);
-                          }}
-                          className="px-2.5 py-1.5 bg-purple-950 hover:bg-purple-900 text-white rounded font-bold text-[11px] inline-flex items-center gap-1 shadow-xs"
-                          title="Publish lead to the open Marketplace for all brokers to unlock"
-                        >
-                          <Sparkles className="w-3.5 h-3.5 text-purple-300" />
-                          <span>Send to Marketplace</span>
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* MODULE 7: VERIFICATION QUEUE (/admin/verification) */}
-      {activeTab === 'verification' && (
+      {/* MODULE 6: ENQUIRIES & SITE VISITS */}
+      {(activeTab === 'enquiries' || activeTab === 'site_visits') && (
         <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs space-y-4">
           <h3 className="text-base font-extrabold text-slate-900 pb-3 border-b border-slate-200">
-            Pending Verification Center ({pendingVerificationItems.length})
+            {activeTab === 'enquiries' ? 'Customer Callback Enquiries' : 'Physical Site Visit Slots'}
           </h3>
+          
           <div className="space-y-3">
-            {pendingVerificationItems.map((item, idx) => (
-              <div key={idx} className="p-4 bg-amber-50/60 border border-amber-200 rounded-xl flex items-center justify-between text-xs">
-                <div>
-                  <span className="text-[10px] font-extrabold uppercase bg-amber-200 text-amber-900 px-2 py-0.5 rounded">
-                    {item.type} verification
-                  </span>
-                  <h4 className="font-extrabold text-slate-900 text-sm mt-1">{item.title}</h4>
-                  <p className="text-slate-600">{item.subtitle}</p>
+            {activeTab === 'enquiries' ? (
+              enquiriesList.map(enq => (
+                <div key={enq.id} className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-2 text-xs">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <h4 className="font-extrabold text-slate-900 text-sm">{enq.customerName} ({enq.customerPhone})</h4>
+                      <p className="text-slate-600 font-semibold">{enq.propertyTitle}</p>
+                    </div>
+                    <span className="bg-blue-100 text-brand-800 font-extrabold px-2 py-0.5 rounded text-[10px]">
+                      {enq.status}
+                    </span>
+                  </div>
+                  <p className="text-slate-700 bg-white p-2.5 rounded border border-slate-200">{enq.message}</p>
                 </div>
-                <div className="flex gap-2">
-                  <button 
-                    onClick={() => {
-                      if (item.type === 'broker') handleVerifyBrokerRera(item.id, true);
-                      else handleUpdatePropertyApproval(item.id, 'Approved');
-                    }}
-                    className="px-3 py-1.5 bg-emerald-600 text-white rounded font-bold"
-                  >
-                    Approve
-                  </button>
-                  <button 
-                    onClick={() => {
-                      if (item.type === 'broker') handleVerifyBrokerRera(item.id, false);
-                      else handleUpdatePropertyApproval(item.id, 'Rejected');
-                    }}
-                    className="px-3 py-1.5 bg-red-600 text-white rounded font-bold"
-                  >
-                    Reject
-                  </button>
+              ))
+            ) : (
+              siteVisits.map(visit => (
+                <div key={visit.id} className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-2 text-xs">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <h4 className="font-extrabold text-slate-900 text-sm">{visit.customerName} ({visit.customerPhone})</h4>
+                      <p className="text-slate-600 font-semibold">{visit.propertyTitle}</p>
+                      <p className="text-purple-800 font-bold mt-1">Slot: {visit.requestedDate}</p>
+                    </div>
+                    <span className="bg-purple-100 text-purple-900 font-extrabold px-2.5 py-1 rounded text-[10px] uppercase">
+                      {visit.status}
+                    </span>
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </div>
       )}
 
-      {/* MODULE 8: PAYMENTS ARCHITECTURE (/admin/payments) */}
-      {activeTab === 'payments' && (
-        <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-xs space-y-4 text-xs font-semibold text-slate-700 max-w-2xl">
-          <h3 className="text-base font-extrabold text-slate-900 pb-3 border-b border-slate-200 flex items-center gap-2">
-            <CreditCard className="w-5 h-5 text-amber-600" />
-            Monetization & Payments Architecture
-          </h3>
-          <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-2">
-            <p className="text-slate-700">
-              Revenue analytics and transaction ledger will activate when public monetization features are enabled.
-            </p>
-            <div className="grid grid-cols-2 gap-2 pt-2">
-              <div className="bg-white p-2.5 rounded border border-slate-200">
-                <span className="font-bold text-slate-900 block">Broker Lead Packs</span>
-                <span className="text-[11px] text-slate-500">₹2,500 – ₹10,000</span>
-              </div>
-              <div className="bg-white p-2.5 rounded border border-slate-200">
-                <span className="font-bold text-slate-900 block">Featured Listing Slots</span>
-                <span className="text-[11px] text-slate-500">₹999 / listing</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* MODULE 9: SETTINGS & AUDIT LOGS (/admin/settings) */}
+      {/* MODULE 7: AUDIT LOGS & SETTINGS (/admin/settings) */}
       {activeTab === 'settings' && (
         <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs space-y-4">
-          <h3 className="text-base font-extrabold text-slate-900 pb-3 border-b border-slate-200">
-            System Action Audit Logs
+          <h3 className="text-base font-extrabold text-slate-900 pb-3 border-b border-slate-200 flex items-center gap-2">
+            <Settings className="w-5 h-5 text-slate-700" />
+            System Operations Audit Log
           </h3>
+
           <div className="space-y-2">
             {auditLogs.map(log => (
-              <div key={log.id} className="p-3 bg-slate-50 border border-slate-200 rounded-lg text-xs flex justify-between items-start gap-4">
+              <div key={log.id} className="p-3 bg-slate-50 border border-slate-200 rounded-lg text-xs flex justify-between items-center">
                 <div>
-                  <div className="font-extrabold text-slate-900">{log.action} — <span className="text-slate-600 font-normal">{log.actor}</span></div>
-                  <div className="text-slate-600 mt-0.5">{log.details}</div>
+                  <div className="font-extrabold text-slate-900">{log.action}</div>
+                  <div className="text-slate-600 text-[11px]">{log.details}</div>
+                  <div className="text-[10px] text-slate-400 mt-0.5">By: {log.actor}</div>
                 </div>
-                <span className="text-[10px] text-slate-400 shrink-0">{log.timestamp}</span>
+                <span className="text-[10px] font-mono text-slate-400">{log.timestamp}</span>
               </div>
             ))}
           </div>
         </div>
       )}
 
-      {/* SEND LEAD TO BROKER MODAL */}
-      {assigningCustomer && (
-        <div className="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 relative text-xs font-semibold text-slate-700">
+      {/* CREATE / INVITE BROKER MODAL */}
+      {isCreateBrokerOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/75 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl max-w-md w-full p-6 shadow-2xl border border-slate-200 relative text-xs font-semibold text-slate-700">
             <div className="flex items-center justify-between pb-3 border-b border-slate-200 mb-4">
-              <h3 className="text-base font-extrabold text-slate-900">Assign Lead to Verified Broker</h3>
-              <button onClick={() => setAssigningCustomer(null)} className="p-1 text-slate-400 hover:text-slate-700">
+              <h3 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
+                <UserPlus className="w-5 h-5 text-purple-700" /> Create / Invite Partner Broker
+              </h3>
+              <button onClick={() => setIsCreateBrokerOpen(false)} className="p-1 text-slate-400 hover:text-slate-700">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleConfirmAssignLead} className="space-y-4">
-              <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
-                <div className="font-extrabold text-slate-900">{assigningCustomer?.fullName || assigningCustomer?.name || 'Customer'}</div>
-                <div className="text-[11px] text-slate-600">
-                  {assigningCustomer?.locality || 'Jammu'} ({(assigningCustomer?.propertyType || 'property').toUpperCase()}) • Budget: {assigningCustomer?.budgetDisplay || 'Standard'}
-                </div>
+            <form onSubmit={handleCreateBroker} className="space-y-3">
+              <div>
+                <label className="block text-slate-500 uppercase tracking-wider mb-1 text-[10px]">Broker Name *</label>
+                <input 
+                  type="text"
+                  required
+                  placeholder="e.g. Lt. Col. Vikram Singh"
+                  value={newBrokerName}
+                  onChange={(e) => setNewBrokerName(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-300 rounded p-2 text-xs text-slate-900"
+                />
               </div>
 
               <div>
-                <label className="block text-slate-500 uppercase tracking-wider mb-1 text-[10px]">Select Broker</label>
-                <select
-                  value={selectedBrokerId}
-                  onChange={(e) => setSelectedBrokerId(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-300 rounded p-2 font-bold text-slate-900"
+                <label className="block text-slate-500 uppercase tracking-wider mb-1 text-[10px]">Agency Name</label>
+                <input 
+                  type="text"
+                  placeholder="e.g. Duggar Realty Jammu"
+                  value={newBrokerAgency}
+                  onChange={(e) => setNewBrokerAgency(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-300 rounded p-2 text-xs text-slate-900"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-slate-500 uppercase tracking-wider mb-1 text-[10px]">Mobile Phone *</label>
+                  <input 
+                    type="tel"
+                    required
+                    placeholder="+91 94191 12345"
+                    value={newBrokerPhone}
+                    onChange={(e) => setNewBrokerPhone(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-300 rounded p-2 text-xs text-slate-900"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-slate-500 uppercase tracking-wider mb-1 text-[10px]">Official Email *</label>
+                  <input 
+                    type="email"
+                    required
+                    placeholder="broker@agency.com"
+                    value={newBrokerEmail}
+                    onChange={(e) => setNewBrokerEmail(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-300 rounded p-2 text-xs text-slate-900"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-slate-500 uppercase tracking-wider mb-1 text-[10px]">JK RERA Reg Number</label>
+                  <input 
+                    type="text"
+                    placeholder="JKRERA/JM/AGENT/2026"
+                    value={newBrokerRera}
+                    onChange={(e) => setNewBrokerRera(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-300 rounded p-2 text-xs text-slate-900 font-mono"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-slate-500 uppercase tracking-wider mb-1 text-[10px]">Service Locality</label>
+                  <input 
+                    type="text"
+                    placeholder="Gandhi Nagar, Jammu"
+                    value={newBrokerLocality}
+                    onChange={(e) => setNewBrokerLocality(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-300 rounded p-2 text-xs text-slate-900"
+                  />
+                </div>
+              </div>
+
+              <button 
+                type="submit"
+                className="w-full bg-purple-950 hover:bg-purple-900 text-white font-extrabold text-xs py-3 rounded transition-colors uppercase tracking-wider shadow-sm mt-2"
+              >
+                Create Partner Broker Account
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ASSIGN LEAD TO BROKER MODAL */}
+      {assigningLead && (
+        <div className="fixed inset-0 z-50 bg-slate-900/75 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl max-w-md w-full p-6 shadow-2xl border border-slate-200 relative text-xs font-semibold text-slate-700 space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200">
+              <h3 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
+                <Send className="w-5 h-5 text-purple-700" /> Assign Lead to Partner Broker
+              </h3>
+              <button onClick={() => setAssigningLead(null)} className="p-1 text-slate-400 hover:text-slate-700">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="bg-slate-50 p-3 rounded-lg border border-slate-200 space-y-1">
+              <div className="font-extrabold text-slate-900 text-sm">{assigningLead.customerName}</div>
+              <div className="text-slate-600">Locality: {assigningLead.locality} • Budget: {assigningLead.budgetDisplay}</div>
+              <div className="text-[10px] text-brand-700 font-bold">Intent Score: {assigningLead.intentScore || 75}/100</div>
+            </div>
+
+            <form onSubmit={handleAssignLeadSubmit} className="space-y-3">
+              <div>
+                <label className="block text-slate-500 uppercase tracking-wider mb-1 text-[10px]">Select Partner Broker (Active + Verified Only)</label>
+                <select 
+                  required
+                  value={assignBrokerId}
+                  onChange={(e) => setAssignBrokerId(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-300 rounded p-2 text-xs font-bold text-slate-900"
                 >
-                  {recommendedBrokers.map(b => (
-                    <option key={b.id} value={b.id}>
-                      {b.name} ({b.agencyName}) — {b.locality}
-                    </option>
+                  <option value="">-- Choose Partner Broker --</option>
+                  {brokersList.filter(b => b.status === 'Active' && b.verificationStatus === 'verified').map(b => (
+                    <option key={b.id} value={b.id}>{b.name} ({b.agencyName}) - {b.locality}</option>
                   ))}
                 </select>
               </div>
 
-              <div className="flex gap-2">
-                <button
-                  type="submit"
-                  className="flex-1 bg-amber-600 hover:bg-amber-700 text-white font-extrabold text-xs py-3 rounded uppercase"
+              <div>
+                <label className="block text-slate-500 uppercase tracking-wider mb-1 text-[10px]">Set Priority</label>
+                <select 
+                  value={assignPriority}
+                  onChange={(e) => setAssignPriority(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-300 rounded p-2 text-xs font-bold text-slate-900"
                 >
-                  Confirm Direct Assignment
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    handleSendLeadToMarketplace(assigningCustomer);
-                    setAssigningCustomer(null);
-                  }}
-                  className="flex-1 bg-purple-950 hover:bg-purple-900 text-white font-extrabold text-xs py-3 rounded uppercase flex items-center justify-center gap-1"
-                >
-                  <Sparkles className="w-3.5 h-3.5 text-purple-300" />
-                  <span>Send to Marketplace</span>
-                </button>
+                  <option value="low">Low Priority</option>
+                  <option value="medium">Medium Priority</option>
+                  <option value="high">High Priority</option>
+                  <option value="urgent">Urgent Priority</option>
+                </select>
               </div>
+
+              <div>
+                <label className="block text-slate-500 uppercase tracking-wider mb-1 text-[10px]">Admin Internal Note to Broker</label>
+                <textarea 
+                  rows={2}
+                  placeholder="e.g. Verified customer looking to close deal by weekend..."
+                  value={assignAdminNote}
+                  onChange={(e) => setAssignAdminNote(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-300 rounded p-2 text-xs text-slate-900"
+                />
+              </div>
+
+              <button 
+                type="submit"
+                className="w-full bg-purple-950 hover:bg-purple-900 text-white font-extrabold text-xs py-3 rounded transition-colors uppercase tracking-wider shadow-sm"
+              >
+                Confirm Lead Assignment
+              </button>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* CUSTOMER DETAIL MODAL */}
+      {selectedCustomerDetail && (
+        <div className="fixed inset-0 z-50 bg-slate-900/75 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 relative text-xs font-semibold text-slate-700 space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200">
+              <h3 className="text-base font-extrabold text-slate-900">{selectedCustomerDetail.name}</h3>
+              <button onClick={() => setSelectedCustomerDetail(null)} className="p-1 text-slate-400 hover:text-slate-700">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <span className="text-[10px] text-slate-400 block uppercase">Phone Number</span>
+                <span className="font-extrabold text-slate-900">{selectedCustomerDetail.phone}</span>
+              </div>
+              <div>
+                <span className="text-[10px] text-slate-400 block uppercase">Email</span>
+                <span className="font-extrabold text-slate-900">{selectedCustomerDetail.email}</span>
+              </div>
+              <div>
+                <span className="text-[10px] text-slate-400 block uppercase">Registration Date</span>
+                <span>{selectedCustomerDetail.registrationDate || '10 Aug 2026'}</span>
+              </div>
+              <div>
+                <span className="text-[10px] text-slate-400 block uppercase">City</span>
+                <span>{selectedCustomerDetail.city}</span>
+              </div>
+            </div>
+
+            <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
+              <span className="text-[10px] text-slate-400 block uppercase font-bold">Intent Score & Behavioral Reasons</span>
+              <div className="text-base font-extrabold text-red-600 mt-0.5">{selectedCustomerDetail.intentScore || 85}/100 (HOT INTENT)</div>
+              <ul className="list-disc list-inside mt-1 text-[11px] text-slate-600 space-y-0.5">
+                {(selectedCustomerDetail.intentReasons || ['Viewed 6 properties', 'Saved 3 listings', 'Requested callback enquiry']).map((r, idx) => (
+                  <li key={idx}>{r}</li>
+                ))}
+              </ul>
+            </div>
+
+            <div className="pt-2 flex gap-2 font-bold">
+              <button 
+                onClick={() => handleUpdateCustomerStatus(selectedCustomerDetail.id, selectedCustomerDetail.accountStatus === 'Active' ? 'Suspended' : 'Active')}
+                className="flex-1 py-2 bg-amber-100 text-amber-900 rounded text-xs text-center"
+              >
+                {selectedCustomerDetail.accountStatus === 'Active' ? 'Suspend Customer' : 'Reactivate Customer'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* BROKER DETAIL MODAL */}
+      {selectedBrokerDetail && (
+        <div className="fixed inset-0 z-50 bg-slate-900/75 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 relative text-xs font-semibold text-slate-700 space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200">
+              <div>
+                <h3 className="text-base font-extrabold text-slate-900">{selectedBrokerDetail.name}</h3>
+                <p className="text-xs text-purple-900 font-bold">{selectedBrokerDetail.agencyName}</p>
+              </div>
+              <button onClick={() => setSelectedBrokerDetail(null)} className="p-1 text-slate-400 hover:text-slate-700">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <span className="text-[10px] text-slate-400 block uppercase">JK RERA ID</span>
+                <span className="font-mono text-emerald-800 font-bold">{selectedBrokerDetail.reraId}</span>
+              </div>
+              <div>
+                <span className="text-[10px] text-slate-400 block uppercase">Verification</span>
+                <span className="font-extrabold text-emerald-700 uppercase">{selectedBrokerDetail.verificationStatus}</span>
+              </div>
+              <div>
+                <span className="text-[10px] text-slate-400 block uppercase">Assigned Leads</span>
+                <span className="font-bold text-slate-900">{selectedBrokerDetail.assignedLeadsCount || 14} Leads</span>
+              </div>
+              <div>
+                <span className="text-[10px] text-slate-400 block uppercase">Conversion Rate</span>
+                <span className="font-bold text-emerald-700">{selectedBrokerDetail.conversionRate || '11.9%'}</span>
+              </div>
+            </div>
+
+            <div className="pt-2 flex gap-2 font-bold">
+              <button 
+                onClick={() => handleVerifyBrokerRera(selectedBrokerDetail.id, selectedBrokerDetail.verificationStatus !== 'verified')}
+                className="flex-1 py-2 bg-emerald-600 text-white rounded text-xs text-center"
+              >
+                {selectedBrokerDetail.verificationStatus === 'verified' ? 'Revoke RERA Verification' : 'Verify RERA Credentials'}
+              </button>
+            </div>
           </div>
         </div>
       )}

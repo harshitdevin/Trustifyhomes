@@ -11,43 +11,50 @@ import UnitConverterModal from './components/UnitConverterModal';
 import StampDutyModal from './components/StampDutyModal';
 import CompareModal from './components/CompareModal';
 import PostPropertyModal from './components/PostPropertyModal';
+import ListYourPropertyModal from './components/ListYourPropertyModal';
 import AuthModal from './components/AuthModal';
 import BrokerDashboard from './components/BrokerDashboard';
 import ProfilePage from './components/ProfilePage';
 import AdminDashboard from './components/AdminDashboard';
 import Footer from './components/Footer';
 
-import { CITIES_DATA } from './data/citiesAndLocalities';
+import { CITIES_DATA, JAMMU_COLLEGES, calculateDistanceKm } from './data/citiesAndLocalities';
 import { MOCK_PROPERTIES } from './data/mockProperties';
 import { dbService } from './services/dbService';
 import { supabaseService } from './services/supabaseService';
 import { leadIntelligenceService } from './services/leadIntelligenceService';
 import { supabase } from './lib/supabase';
-import { Building2, Heart, Search, ShieldCheck, Loader2 } from 'lucide-react';
+import { Building2, Heart, Search, ShieldCheck, Loader2, Home, GraduationCap, ShieldAlert } from 'lucide-react';
 
 export default function App() {
   // Supabase Auth & Session State
   const [currentUser, setCurrentUser] = useState(null);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
 
-  // App State
+  // App Properties State
   const [properties, setProperties] = useState(MOCK_PROPERTIES);
   const [isLoadingProperties, setIsLoadingProperties] = useState(false);
 
   const [selectedCity, setSelectedCity] = useState(CITIES_DATA[0]); // Default Jammu
-  const [activeTab, setActiveTab] = useState('buy'); // buy | rent | plot | saved
+  const [activeTab, setActiveTab] = useState('buy'); // buy | rent | pg | plot | saved
   const [searchLocality, setSearchLocality] = useState('');
   const [selectedBhk, setSelectedBhk] = useState([]);
   const [selectedBudget, setSelectedBudget] = useState('all');
   const [selectedPropertyType, setSelectedPropertyType] = useState('all');
 
-  // Role Management State (buyer | owner | broker | student | admin)
-  const [userRole, setUserRole] = useState('buyer');
-  const [activeView, setActiveView] = useState('marketplace'); // marketplace | profile | broker | owner | admin
+  // PG Specific Filters
+  const [pgGender, setPgGender] = useState('All');
+  const [pgRoomType, setPgRoomType] = useState('All');
+  const [selectedCollege, setSelectedCollege] = useState('');
+  const [foodIncluded, setFoodIncluded] = useState('All');
+
+  // Phase 4 System Roles: customer | broker | admin
+  const [userRole, setUserRole] = useState('customer');
+  const [activeView, setActiveView] = useState('marketplace'); // marketplace | profile | broker | admin
   const [adminTab, setAdminTab] = useState('home');
   const [brokerTab, setBrokerTab] = useState('overview');
 
-  // Pill Quick Filters
+  // Quick Filters & Sorting
   const [filterReraOnly, setFilterReraOnly] = useState(false);
   const [filterOwnerOnly, setFilterOwnerOnly] = useState(false);
   const [filterReadyToMove, setFilterReadyToMove] = useState(false);
@@ -63,31 +70,45 @@ export default function App() {
   const [isStampDutyOpen, setIsStampDutyOpen] = useState(false);
   const [isCompareOpen, setIsCompareOpen] = useState(false);
   const [isPostPropertyOpen, setIsPostPropertyOpen] = useState(false);
+  const [isListYourPropertyOpen, setIsListYourPropertyOpen] = useState(false);
 
   // Shortlists & Compare State
   const [shortlistedIds, setShortlistedIds] = useState(() => {
     const saved = localStorage.getItem('ez_shortlisted');
-    return saved ? JSON.parse(saved) : ['ez-jm-101'];
+    return saved ? JSON.parse(saved) : ['ez-jm-101', 'ez-pg-201'];
   });
 
   const [comparedIds, setComparedIds] = useState([]);
 
-  // Supabase Auth State Listener & Initial Role View Sync
+  // Supabase Auth State Listener & Role Sync
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    const fetchVerifiedRole = async (user) => {
+      if (!user) return 'customer';
+      let r = 'customer';
+      try {
+        const profile = await supabaseService.getProfile(user.id);
+        if (profile?.role) r = profile.role.toLowerCase();
+      } catch (e) {
+        r = (user.user_metadata?.role || 'customer').toLowerCase();
+      }
+      // Normalize 3 Phase 4 System Roles: customer | broker | admin
+      if (r === 'buyer' || r === 'student' || r === 'owner') return 'customer';
+      return r;
+    };
+
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (session?.user) {
         setCurrentUser(session.user);
-        const metaRole = (session.user.user_metadata?.role || 'buyer').toLowerCase();
-        setUserRole(metaRole);
-        if (metaRole === 'admin') {
+        const verifiedRole = await fetchVerifiedRole(session.user);
+        setUserRole(verifiedRole);
+        if (verifiedRole === 'admin') {
           setActiveView('admin');
-        } else if (metaRole === 'broker' || metaRole === 'owner') {
+        } else if (verifiedRole === 'broker') {
           setActiveView('broker');
         } else {
           setActiveView('marketplace');
         }
       } else {
-        // Automatically prompt for Sign Up / Sign In on first visit
         setIsAuthModalOpen(true);
       }
     });
@@ -95,24 +116,23 @@ export default function App() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (session?.user) {
         setCurrentUser(session.user);
-        const metaRole = (session.user.user_metadata?.role || 'buyer').toLowerCase();
-        setUserRole(metaRole);
-        if (metaRole === 'admin') {
+        const verifiedRole = await fetchVerifiedRole(session.user);
+        setUserRole(verifiedRole);
+        if (verifiedRole === 'admin') {
           setActiveView('admin');
-        } else if (metaRole === 'broker' || metaRole === 'owner') {
+        } else if (verifiedRole === 'broker') {
           setActiveView('broker');
         } else {
           setActiveView('marketplace');
         }
         
-        // Sync favorites from Supabase DB
         try {
           const dbFavorites = await supabaseService.getUserFavorites(session.user.id);
           if (dbFavorites.length > 0) {
             setShortlistedIds(prev => Array.from(new Set([...prev, ...dbFavorites])));
           }
         } catch (e) {
-          console.warn('Could not sync user favorites from DB:', e.message);
+          console.warn('Could not sync favorites from DB:', e.message);
         }
       } else {
         setCurrentUser(null);
@@ -122,7 +142,7 @@ export default function App() {
     return () => subscription.unsubscribe();
   }, []);
 
-  // Fetch Real Supabase Properties whenever city, activeTab, searchLocality, or propertyType changes
+  // Fetch Approved Properties & PGs from Supabase
   useEffect(() => {
     let isSubscribed = true;
     setIsLoadingProperties(true);
@@ -132,16 +152,21 @@ export default function App() {
       listingType: activeTab,
       propertyType: selectedPropertyType,
       searchLocality,
-      limit: 30,
+      limit: 40,
       offset: 0
     }).then(fetchedProps => {
       if (isSubscribed) {
-        setProperties(fetchedProps);
+        const hasPgInFetched = fetchedProps.some(p => p.listingType === 'pg' || p.propertyType === 'pg');
+        if (activeTab === 'pg' && !hasPgInFetched) {
+          setProperties(MOCK_PROPERTIES);
+        } else {
+          setProperties(fetchedProps);
+        }
         setIsLoadingProperties(false);
       }
     }).catch(err => {
       if (isSubscribed) {
-        console.warn('Property fetch error, using local fallback:', err);
+        setProperties(MOCK_PROPERTIES);
         setIsLoadingProperties(false);
       }
     });
@@ -158,7 +183,7 @@ export default function App() {
     if (prop) {
       leadIntelligenceService.trackActivityEvent({
         userId: currentUser?.id || 'cust-101',
-        eventType: 'property_view',
+        eventType: (prop.listingType === 'pg' || prop.propertyType === 'pg') ? 'pg_view' : 'property_view',
         propertyId: prop.id,
         locality: prop.locality,
         propertyType: prop.propertyType
@@ -182,7 +207,6 @@ export default function App() {
       if (currentUser?.id) {
         try { await supabaseService.addFavorite(currentUser.id, propId); } catch (e) {}
       }
-      // Track property_save activity event
       leadIntelligenceService.trackActivityEvent({
         userId: currentUser?.id || 'cust-101',
         eventType: 'property_save',
@@ -212,6 +236,10 @@ export default function App() {
     setSelectedBhk([]);
     setSelectedBudget('all');
     setSelectedPropertyType('all');
+    setPgGender('All');
+    setPgRoomType('All');
+    setSelectedCollege('');
+    setFoodIncluded('All');
     setFilterReraOnly(false);
     setFilterOwnerOnly(false);
     setFilterReadyToMove(false);
@@ -222,19 +250,36 @@ export default function App() {
   const handleLogout = async () => {
     await supabaseService.signOutUser();
     setCurrentUser(null);
-    setUserRole('buyer');
+    setUserRole('customer');
     setActiveView('marketplace');
     setIsAuthModalOpen(true);
   };
 
-  // Filter Computation Engine
-  const filteredProperties = properties.filter(p => {
-    // City filter
+  // College Distance Calculation
+  const enrichedProperties = properties.map(p => {
+    let distanceKm = p.collegeDistanceKm;
+    let targetCollegeName = p.collegeName;
+
+    if (selectedCollege) {
+      const colObj = JAMMU_COLLEGES.find(c => c.id === selectedCollege);
+      if (colObj && p.latitude && p.longitude) {
+        const computed = calculateDistanceKm(colObj.latitude, colObj.longitude, p.latitude, p.longitude);
+        if (computed !== null) {
+          distanceKm = computed;
+          targetCollegeName = colObj.name;
+        }
+      }
+    }
+    return { ...p, collegeDistanceKm: distanceKm, collegeName: targetCollegeName };
+  });
+
+  const filteredProperties = enrichedProperties.filter(p => {
     if (p.city.toLowerCase() !== selectedCity.name.toLowerCase()) return false;
 
-    // Active tab filter (buy vs rent vs plot vs saved)
     if (activeTab === 'saved') {
       if (!shortlistedIds.includes(p.id)) return false;
+    } else if (activeTab === 'pg') {
+      if (p.listingType !== 'pg' && p.propertyType !== 'pg') return false;
     } else if (activeTab === 'rent') {
       if (p.listingType !== 'rent') return false;
     } else if (activeTab === 'plot') {
@@ -243,122 +288,68 @@ export default function App() {
       if (p.listingType !== 'buy') return false;
     }
 
-    // Locality search
     if (searchLocality.trim() !== '') {
-      const locMatch = p.locality.toLowerCase().includes(searchLocality.toLowerCase()) ||
-                       p.title.toLowerCase().includes(searchLocality.toLowerCase()) ||
-                       p.address.toLowerCase().includes(searchLocality.toLowerCase());
+      const query = searchLocality.toLowerCase();
+      const locMatch = p.locality.toLowerCase().includes(query) ||
+                       p.title.toLowerCase().includes(query) ||
+                       (p.address && p.address.toLowerCase().includes(query)) ||
+                       (p.collegeName && p.collegeName.toLowerCase().includes(query));
       if (!locMatch) return false;
     }
 
-    // Property Type
-    if (selectedPropertyType !== 'all' && p.propertyType !== selectedPropertyType) return false;
-
-    // BHK filter
-    if (selectedBhk.length > 0) {
-      if (!selectedBhk.includes(p.bhk)) return false;
-    }
-
-    // Budget range filter
-    if (selectedBudget !== 'all') {
-      if (activeTab === 'rent') {
-        if (selectedBudget === 'under-30k' && p.priceVal > 30000) return false;
-        if (selectedBudget === '30k-50k' && (p.priceVal < 30000 || p.priceVal > 50000)) return false;
-        if (selectedBudget === '50k-plus' && p.priceVal < 50000) return false;
-      } else {
-        if (selectedBudget === 'under-50l' && p.priceVal > 5000000) return false;
-        if (selectedBudget === '50l-1cr' && (p.priceVal < 5000000 || p.priceVal > 10000000)) return false;
-        if (selectedBudget === '1cr-2cr' && (p.priceVal < 10000000 || p.priceVal > 20000000)) return false;
-        if (selectedBudget === '2cr-plus' && p.priceVal < 20000000) return false;
+    if (activeTab === 'pg') {
+      if (pgGender !== 'All' && p.pgGender && p.pgGender.toLowerCase() !== pgGender.toLowerCase()) return false;
+      if (pgRoomType !== 'All' && p.roomType && p.roomType.toLowerCase() !== pgRoomType.toLowerCase()) return false;
+      if (foodIncluded === 'Food Included' && !p.foodIncluded) return false;
+      if (foodIncluded === 'No Food' && p.foodIncluded) return false;
+      
+      if (selectedBudget !== 'all') {
+        if (selectedBudget === 'under-5k' && p.priceVal > 5000) return false;
+        if (selectedBudget === '5k-10k' && (p.priceVal < 5000 || p.priceVal > 10000)) return false;
+        if (selectedBudget === '10k-plus' && p.priceVal < 10000) return false;
       }
-    }
+    } else {
+      if (selectedPropertyType !== 'all' && p.propertyType !== selectedPropertyType) return false;
+      if (selectedBhk.length > 0 && !selectedBhk.includes(p.bhk)) return false;
 
-    // Pill Quick Filters
-    if (filterReraOnly && !p.isReraVerified) return false;
-    if (filterOwnerOnly && p.sellerType !== 'Owner') return false;
-    if (filterReadyToMove && p.possessionStatus !== 'Ready to Move') return false;
-    if (filterEastFacing && !p.facing.toLowerCase().includes('east')) return false;
+      if (selectedBudget !== 'all') {
+        if (activeTab === 'rent') {
+          if (selectedBudget === 'under-30k' && p.priceVal > 30000) return false;
+          if (selectedBudget === '30k-50k' && (p.priceVal < 30000 || p.priceVal > 50000)) return false;
+          if (selectedBudget === '50k-plus' && p.priceVal < 50000) return false;
+        } else {
+          if (selectedBudget === 'under-50l' && p.priceVal > 5000000) return false;
+          if (selectedBudget === '50l-1cr' && (p.priceVal < 5000000 || p.priceVal > 10000000)) return false;
+          if (selectedBudget === '1cr-2cr' && (p.priceVal < 10000000 || p.priceVal > 20000000)) return false;
+          if (selectedBudget === '2cr-plus' && p.priceVal < 20000000) return false;
+        }
+      }
+
+      if (filterReraOnly && !p.isReraVerified) return false;
+      if (filterOwnerOnly && p.sellerType !== 'Owner') return false;
+      if (filterReadyToMove && p.possessionStatus !== 'Ready to Move') return false;
+      if (filterEastFacing && (!p.facing || !p.facing.toLowerCase().includes('east'))) return false;
+    }
 
     return true;
   });
 
-  // Sorting
   const sortedProperties = [...filteredProperties].sort((a, b) => {
     if (sortBy === 'price-low') return a.priceVal - b.priceVal;
     if (sortBy === 'price-high') return b.priceVal - a.priceVal;
-    if (sortBy === 'area-high') return b.carpetArea - a.carpetArea;
+    if (sortBy === 'nearest') return (a.collegeDistanceKm || 99) - (b.collegeDistanceKm || 99);
+    if (sortBy === 'area-high') return (b.carpetArea || 0) - (a.carpetArea || 0);
     return 0;
   });
 
   const comparedPropertiesList = properties.filter(p => comparedIds.includes(p.id));
 
-  // Unauthenticated Minimal Portal Entry View (White Theme with Architectural Sketches)
+  // Unauthenticated Portal Entry View
   if (!currentUser && isAuthModalOpen) {
     return (
       <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col justify-between p-4 sm:p-8 relative overflow-hidden font-sans">
-        
-        {/* Subtle Architectural Blueprint Grid Pattern Background */}
         <div className="absolute inset-0 bg-[radial-gradient(#cbd5e1_1px,transparent_1px)] [background-size:24px_24px] opacity-60 pointer-events-none" />
 
-        {/* Architectural Building Sketches Line Art */}
-        <div className="absolute inset-0 pointer-events-none opacity-25 overflow-hidden flex items-end justify-between">
-          {/* Left Building Sketch */}
-          <svg className="w-[420px] h-[420px] text-slate-600 stroke-current -ml-10 -mb-6" viewBox="0 0 400 400" fill="none" strokeWidth="1.2">
-            <line x1="0" y1="50" x2="400" y2="50" strokeDasharray="4 4" strokeOpacity="0.5" />
-            <line x1="0" y1="150" x2="400" y2="150" strokeDasharray="4 4" strokeOpacity="0.5" />
-            <line x1="0" y1="250" x2="400" y2="250" strokeDasharray="4 4" strokeOpacity="0.5" />
-            <line x1="100" y1="0" x2="100" y2="400" strokeDasharray="4 4" strokeOpacity="0.5" />
-            <line x1="250" y1="0" x2="250" y2="400" strokeDasharray="4 4" strokeOpacity="0.5" />
-            
-            <rect x="60" y="160" width="180" height="180" rx="2" />
-            <polygon points="40,160 150,80 260,160" />
-            <rect x="90" y="200" width="45" height="55" />
-            <line x1="112.5" y1="200" x2="112.5" y2="255" />
-            <line x1="90" y1="227.5" x2="135" y2="227.5" />
-            
-            <rect x="165" y="200" width="45" height="55" />
-            <line x1="187.5" y1="200" x2="187.5" y2="255" />
-            <line x1="165" y1="227.5" x2="210" y2="227.5" />
-            
-            <rect x="120" y="280" width="45" height="60" />
-            <circle cx="155" cy="310" r="2.5" fill="currentColor" />
-
-            <rect x="260" y="100" width="100" height="240" />
-            <line x1="260" y1="140" x2="360" y2="140" />
-            <line x1="260" y1="180" x2="360" y2="180" />
-            <line x1="260" y1="220" x2="360" y2="220" />
-            <line x1="260" y1="260" x2="360" y2="260" />
-            <line x1="260" y1="300" x2="360" y2="300" />
-            <line x1="310" y1="100" x2="310" y2="340" />
-          </svg>
-
-          {/* Right Villa Sketch */}
-          <svg className="w-[480px] h-[480px] text-slate-600 stroke-current -mr-12 -mb-8 hidden md:block" viewBox="0 0 500 500" fill="none" strokeWidth="1.2">
-            <rect x="100" y="200" width="280" height="220" />
-            <polygon points="80,200 240,100 400,200" />
-            <rect x="140" y="240" width="60" height="70" />
-            <line x1="170" y1="240" x2="170" y2="310" />
-            <line x1="140" y1="275" x2="200" y2="275" />
-
-            <rect x="240" y="240" width="60" height="70" />
-            <line x1="270" y1="240" x2="270" y2="310" />
-            <line x1="240" y1="275" x2="300" y2="275" />
-
-            <rect x="190" y="340" width="60" height="80" />
-            <circle cx="238" cy="380" r="3" fill="currentColor" />
-            <line x1="100" y1="310" x2="380" y2="310" />
-            
-            <line x1="80" y1="440" x2="400" y2="440" />
-            <line x1="80" y1="435" x2="80" y2="445" />
-            <line x1="400" y1="435" x2="400" y2="445" />
-            
-            <line x1="420" y1="100" x2="420" y2="420" />
-            <line x1="415" y1="100" x2="425" y2="100" />
-            <line x1="415" y1="420" x2="425" y2="420" />
-          </svg>
-        </div>
-
-        {/* Header */}
         <header className="relative z-10 flex items-center justify-between max-w-6xl mx-auto w-full">
           <div className="flex items-center gap-2">
             <div className="bg-purple-950 text-white p-2 rounded-xl font-bold shadow-md">
@@ -374,11 +365,10 @@ export default function App() {
             onClick={() => setIsAuthModalOpen(false)}
             className="text-xs text-slate-700 hover:text-slate-900 font-extrabold bg-white border border-slate-300 shadow-xs px-3.5 py-2 rounded-lg transition-all hover:bg-slate-100"
           >
-            Browse Marketplace as Guest →
+            Browse Portal as Guest →
           </button>
         </header>
 
-        {/* Centered Auth Card */}
         <main className="relative z-10 flex-1 flex items-center justify-center my-6">
           <AuthModal 
             isOpen={true}
@@ -386,12 +376,13 @@ export default function App() {
             isInline={true}
             onAuthSuccess={(user, roleOverride) => {
               if (user) setCurrentUser(user);
-              const userRoleDetected = (roleOverride || user?.user_metadata?.role || user?.role || 'buyer').toLowerCase();
-              setUserRole(userRoleDetected);
-              if (userRoleDetected === 'admin') {
+              const userRoleDetected = (roleOverride || user?.user_metadata?.role || user?.role || 'customer').toLowerCase();
+              const safeRole = (userRoleDetected === 'buyer' || userRoleDetected === 'student' || userRoleDetected === 'owner') ? 'customer' : userRoleDetected;
+              setUserRole(safeRole);
+              if (safeRole === 'admin') {
                 setActiveView('admin');
                 setAdminTab('home');
-              } else if (userRoleDetected === 'broker' || userRoleDetected === 'owner') {
+              } else if (safeRole === 'broker') {
                 setActiveView('broker');
                 setBrokerTab('overview');
               } else {
@@ -402,9 +393,8 @@ export default function App() {
           />
         </main>
 
-        {/* Footer */}
         <footer className="relative z-10 text-center text-xs text-slate-500 font-semibold py-2 border-t border-slate-200">
-          Trustify Homes • Verifiable Real Estate & Architectural Management Platform for Jammu & Kashmir
+          Trustify Homes • Verifiable Property & Student Housing Portal for Jammu & Kashmir
         </footer>
       </div>
     );
@@ -427,6 +417,7 @@ export default function App() {
         onOpenStampDuty={() => setIsStampDutyOpen(true)}
         onOpenCompare={() => setIsCompareOpen(true)}
         onOpenPostProperty={() => setIsPostPropertyOpen(true)}
+        onOpenListYourProperty={() => setIsListYourPropertyOpen(true)}
         userRole={userRole}
         setUserRole={setUserRole}
         activeView={activeView}
@@ -440,7 +431,7 @@ export default function App() {
         setBrokerTab={setBrokerTab}
       />
 
-      {/* Main View Router: Profile vs Admin vs Broker vs Marketplace */}
+      {/* Main View Router with Explicit Role Security Guards */}
       {activeView === 'profile' ? (
         <ProfilePage 
           userRole={userRole} 
@@ -449,21 +440,45 @@ export default function App() {
           currentUser={currentUser}
         />
       ) : activeView === 'admin' ? (
-        <AdminDashboard 
-          properties={properties.filter(p => p.city.toLowerCase() === selectedCity.name.toLowerCase())}
-          onSelectProperty={(prop) => setSelectedPropertyDetail(prop)}
-          onOpenPostProperty={() => setIsPostPropertyOpen(true)}
-          activeTab={adminTab}
-          setActiveTab={setAdminTab}
-        />
+        userRole === 'admin' ? (
+          <AdminDashboard 
+            properties={properties.filter(p => p.city.toLowerCase() === selectedCity.name.toLowerCase())}
+            onSelectProperty={(prop) => setSelectedPropertyDetail(prop)}
+            onOpenPostProperty={() => setIsPostPropertyOpen(true)}
+            activeTab={adminTab}
+            setActiveTab={setAdminTab}
+          />
+        ) : (
+          /* Role Security Denied Card: Customer trying to access Admin */
+          <div className="max-w-md mx-auto my-12 bg-white p-6 rounded-xl border border-red-200 text-center space-y-3 shadow-md">
+            <ShieldAlert className="w-12 h-12 text-red-600 mx-auto" />
+            <h3 className="text-lg font-bold text-slate-900">Access Denied (403)</h3>
+            <p className="text-xs text-slate-600 leading-relaxed">
+              Your customer account role (<strong className="font-mono text-red-700">{userRole}</strong>) does not have administrative privileges to access the Trustify Operations Control Center.
+            </p>
+            <button onClick={() => setActiveView('marketplace')} className="ez-btn-primary py-2 px-4 text-xs font-bold">Return to Marketplace</button>
+          </div>
+        )
       ) : activeView === 'broker' ? (
-        <BrokerDashboard 
-          properties={properties.filter(p => p.city.toLowerCase() === selectedCity.name.toLowerCase())}
-          onOpenPostProperty={() => setIsPostPropertyOpen(true)}
-          onSelectProperty={(prop) => setSelectedPropertyDetail(prop)}
-          activeTab={brokerTab}
-          setActiveTab={setBrokerTab}
-        />
+        (userRole === 'broker' || userRole === 'admin') ? (
+          <BrokerDashboard 
+            properties={properties.filter(p => p.city.toLowerCase() === selectedCity.name.toLowerCase())}
+            onOpenPostProperty={() => setIsPostPropertyOpen(true)}
+            onSelectProperty={(prop) => setSelectedPropertyDetail(prop)}
+            activeTab={brokerTab}
+            setActiveTab={setBrokerTab}
+          />
+        ) : (
+          /* Role Security Denied Card: Customer trying to access Broker */
+          <div className="max-w-md mx-auto my-12 bg-white p-6 rounded-xl border border-red-200 text-center space-y-3 shadow-md">
+            <ShieldAlert className="w-12 h-12 text-red-600 mx-auto" />
+            <h3 className="text-lg font-bold text-slate-900">Access Denied (403)</h3>
+            <p className="text-xs text-slate-600 leading-relaxed">
+              Your account does not have partner broker access. Broker accounts are invited directly by Trustify Admin.
+            </p>
+            <button onClick={() => setActiveView('marketplace')} className="ez-btn-primary py-2 px-4 text-xs font-bold">Return to Marketplace</button>
+          </div>
+        )
       ) : (
         <main className="flex-1">
           {/* Main Hero & Search Engine */}
@@ -480,10 +495,19 @@ export default function App() {
             activeTab={activeTab}
             setActiveTab={setActiveTab}
             onResetFilters={handleResetFilters}
+            pgGender={pgGender}
+            setPgGender={setPgGender}
+            pgRoomType={pgRoomType}
+            setPgRoomType={setPgRoomType}
+            selectedCollege={selectedCollege}
+            setSelectedCollege={setSelectedCollege}
+            foodIncluded={foodIncluded}
+            setFoodIncluded={setFoodIncluded}
           />
 
           {/* Quick Filter Bar */}
           <FilterBar 
+            activeTab={activeTab}
             filterReraOnly={filterReraOnly}
             setFilterReraOnly={setFilterReraOnly}
             filterOwnerOnly={filterOwnerOnly}
@@ -496,17 +520,23 @@ export default function App() {
             setSortBy={setSortBy}
             totalResults={sortedProperties.length}
             onResetFilters={handleResetFilters}
+            pgGender={pgGender}
+            setPgGender={setPgGender}
+            pgRoomType={pgRoomType}
+            setPgRoomType={setPgRoomType}
+            foodIncluded={foodIncluded}
+            setFoodIncluded={setFoodIncluded}
           />
 
           {/* Main Content Area */}
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-            
-            {/* Section Title Banner */}
             <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
               <div>
-                <h2 className="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight">
+                <h2 className="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
                   {activeTab === 'saved' 
                     ? 'Your Saved & Shortlisted Properties' 
+                    : activeTab === 'pg' 
+                    ? `Verified Student PG & Hostels in ${selectedCity.name}`
                     : activeTab === 'rent' 
                     ? `Rental Properties in ${selectedCity.name}` 
                     : activeTab === 'plot' 
@@ -514,12 +544,12 @@ export default function App() {
                     : `Verified Properties for Sale in ${selectedCity.name}`}
                 </h2>
                 <p className="text-xs sm:text-sm text-slate-600 flex items-center gap-2">
-                  <span>Showing {sortedProperties.length} genuine property listings in {selectedCity.name}</span>
+                  <span>Showing {sortedProperties.length} genuine verified listings in {selectedCity.name}</span>
                   {isLoadingProperties && <Loader2 className="w-3.5 h-3.5 animate-spin text-brand-600" />}
                 </p>
               </div>
 
-              {comparedIds.length > 0 && (
+              {comparedIds.length > 0 && activeTab !== 'pg' && (
                 <button 
                   onClick={() => setIsCompareOpen(true)}
                   className="ez-btn-primary bg-slate-900 hover:bg-slate-800 text-xs py-2 px-3"
@@ -529,14 +559,14 @@ export default function App() {
               )}
             </div>
 
-            {/* Property Listing Grid */}
+            {/* Property / PG Listing Grid */}
             {sortedProperties.length > 0 ? (
               <div className="space-y-4">
                 {sortedProperties.map(property => (
                   <PropertyCard 
                     key={property.id}
                     property={property}
-                    onSelectProperty={(prop) => setSelectedPropertyDetail(prop)}
+                    onSelectProperty={(prop) => handleSelectPropertyDetail(prop)}
                     isShortlisted={shortlistedIds.includes(property.id)}
                     onToggleShortlist={handleToggleShortlist}
                     isCompared={comparedIds.includes(property.id)}
@@ -545,18 +575,21 @@ export default function App() {
                 ))}
               </div>
             ) : (
-              /* Empty State Box */
-              <div className="bg-white rounded-xl border border-slate-200 p-12 text-center max-w-lg mx-auto my-8">
-                <div className="w-16 h-16 bg-slate-100 text-slate-400 rounded-full flex items-center justify-center mx-auto mb-4">
+              <div className="bg-white rounded-xl border border-slate-200 p-12 text-center max-w-lg mx-auto my-8 space-y-3">
+                <div className="w-16 h-16 bg-slate-100 text-slate-400 rounded-full flex items-center justify-center mx-auto mb-2">
                   <Search className="w-8 h-8" />
                 </div>
-                <h3 className="text-lg font-bold text-slate-900 mb-1">No Properties Found</h3>
-                <p className="text-xs text-slate-500 mb-5 leading-relaxed">
-                  We couldn't find any property matching your exact locality or budget criteria in {selectedCity.name}.
+                <h3 className="text-lg font-extrabold text-slate-900">
+                  {activeTab === 'pg' ? 'No Student PGs Found' : 'No Properties Found'}
+                </h3>
+                <p className="text-xs text-slate-600 leading-relaxed max-w-sm mx-auto">
+                  {activeTab === 'pg' 
+                    ? `No PG or hostel matched your criteria in ${selectedCity.name}. Try increasing your rent budget or clearing filters.`
+                    : `No properties found in this location. Try increasing your budget or removing a filter.`}
                 </p>
                 <button 
                   onClick={handleResetFilters}
-                  className="ez-btn-primary py-2 px-4 text-xs"
+                  className="ez-btn-primary py-2 px-4 text-xs font-bold"
                 >
                   Reset All Filters & View All Listings
                 </button>
@@ -580,12 +613,13 @@ export default function App() {
           onClose={() => setIsAuthModalOpen(false)}
           onAuthSuccess={(user, roleOverride) => {
             if (user) setCurrentUser(user);
-            const userRoleDetected = (roleOverride || user?.user_metadata?.role || user?.role || 'buyer').toLowerCase();
-            setUserRole(userRoleDetected);
-            if (userRoleDetected === 'admin') {
+            const userRoleDetected = (roleOverride || user?.user_metadata?.role || user?.role || 'customer').toLowerCase();
+            const safeRole = (userRoleDetected === 'buyer' || userRoleDetected === 'student' || userRoleDetected === 'owner') ? 'customer' : userRoleDetected;
+            setUserRole(safeRole);
+            if (safeRole === 'admin') {
               setActiveView('admin');
               setAdminTab('home');
-            } else if (userRoleDetected === 'broker' || userRoleDetected === 'owner') {
+            } else if (safeRole === 'broker') {
               setActiveView('broker');
               setBrokerTab('overview');
             } else {
@@ -641,6 +675,13 @@ export default function App() {
           onAddProperty={handleAddProperty}
           currentUser={currentUser}
           userRole={userRole}
+        />
+      )}
+
+      {/* Mandatory Public Owner CTA Modal: List Your Property */}
+      {isListYourPropertyOpen && (
+        <ListYourPropertyModal 
+          onClose={() => setIsListYourPropertyOpen(false)}
         />
       )}
     </div>

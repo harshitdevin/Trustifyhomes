@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Lock, Mail, User, Phone, Briefcase, ShieldCheck, AlertCircle, Check, MapPin, Sparkles } from 'lucide-react';
+import { X, Lock, Mail, User, Phone, ShieldCheck, AlertCircle, Check, MapPin, Sparkles } from 'lucide-react';
 import { supabaseService } from '../services/supabaseService';
 
 export default function AuthModal({ isOpen, onClose, onAuthSuccess, initialMode = 'login', isInline = false }) {
@@ -8,7 +8,6 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess, initialMode 
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
-  const [role, setRole] = useState('buyer'); // 'buyer' | 'owner' | 'broker' | 'student'
   const [city, setCity] = useState('Jammu');
 
   const [loading, setLoading] = useState(false);
@@ -18,7 +17,7 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess, initialMode 
   if (!isOpen) return null;
 
   const QUICK_TEST_ACCOUNTS = [
-    { role: 'Buyer', email: 'buyer@trustifyhomes.test', pass: 'CHANGE_ME_BUYER_123!', color: 'bg-blue-50 hover:bg-blue-100 text-brand-700 border-blue-200' },
+    { role: 'Customer', email: 'customer@trustifyhomes.test', pass: 'CHANGE_ME_BUYER_123!', color: 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border-emerald-300' },
     { role: 'Broker', email: 'broker@trustifyhomes.test', pass: 'CHANGE_ME_BROKER_123!', color: 'bg-purple-50 hover:bg-purple-100 text-purple-900 border-purple-200' },
     { role: 'Admin', email: 'admin@trustifyhomes.test', pass: 'CHANGE_ME_ADMIN_123!', color: 'bg-red-50 hover:bg-red-100 text-red-900 border-red-200' }
   ];
@@ -42,23 +41,41 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess, initialMode 
 
     try {
       if (mode === 'signup') {
+        // Public signup creates ONLY 'customer' role per Phase 4 Business Rules
+        const signupRole = 'customer';
         const data = await supabaseService.signUpUser({
           email,
           password,
           fullName,
           phone,
-          role,
+          role: signupRole,
           city
         });
-        setSuccessMessage('Account created successfully!');
+        setSuccessMessage('Customer account created successfully!');
         setTimeout(() => {
-          if (onAuthSuccess) onAuthSuccess(data?.user || { email, user_metadata: { role } }, role);
+          if (onAuthSuccess) onAuthSuccess(data?.user || { email, user_metadata: { role: signupRole } }, signupRole);
           onClose();
         }, 1200);
       } else if (mode === 'login') {
         const data = await supabaseService.signInUser({ email, password });
         setSuccessMessage('Logged in successfully!');
-        const loggedRole = selectedQuickRole || data?.user?.user_metadata?.role || (email.includes('admin') ? 'admin' : email.includes('broker') ? 'broker' : email.includes('owner') ? 'owner' : email.includes('student') ? 'student' : 'buyer');
+        let loggedRole = selectedQuickRole || data?.user?.user_metadata?.role;
+        if (!loggedRole && data?.user?.id) {
+          try {
+            const dbProfile = await supabaseService.getProfile(data.user.id);
+            if (dbProfile?.role) loggedRole = dbProfile.role;
+          } catch (e) {}
+        }
+        if (!loggedRole) {
+          if (email.startsWith('admin@')) loggedRole = 'admin';
+          else if (email.startsWith('broker@')) loggedRole = 'broker';
+          else loggedRole = 'customer';
+        }
+        // Normalize legacy 'buyer', 'student', 'owner' to 'customer'
+        if (loggedRole === 'buyer' || loggedRole === 'student' || loggedRole === 'owner') {
+          loggedRole = 'customer';
+        }
+
         setTimeout(() => {
           if (onAuthSuccess) onAuthSuccess(data?.user || { email, user_metadata: { role: loggedRole } }, loggedRole);
           onClose();
@@ -81,10 +98,10 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess, initialMode 
         <div className="flex items-center justify-between pb-4 border-b border-slate-200 mb-4">
           <div>
             <h3 className="text-lg font-extrabold text-slate-900">
-              {mode === 'login' ? 'Welcome Back to EZ HOMES' : mode === 'signup' ? 'Create Your Account' : 'Reset Password'}
+              {mode === 'login' ? 'Welcome Back to Trustify Homes' : mode === 'signup' ? 'Create Customer Account' : 'Reset Password'}
             </h3>
             <p className="text-xs text-slate-500">
-              {mode === 'login' ? 'Sign in to access your dashboard & saved homes' : mode === 'signup' ? 'Select your role & join Jammu\'s premier real estate network' : 'Enter your email to receive a password reset link'}
+              {mode === 'login' ? 'Sign in to access saved homes & site visits' : mode === 'signup' ? 'Join Jammu & Kashmir\'s verified real estate & PG portal' : 'Enter your email to receive a password reset link'}
             </p>
           </div>
           <button 
@@ -99,7 +116,7 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess, initialMode 
         <div className="bg-slate-50 border border-slate-200 p-3 rounded-lg mb-4 space-y-2">
           <div className="flex items-center justify-between text-[10px] font-bold text-slate-500 uppercase tracking-wider">
             <span className="flex items-center gap-1 text-amber-700">
-              <Sparkles className="w-3 h-3 text-amber-600" /> Demo Quick-Fill Test Accounts:
+              <Sparkles className="w-3 h-3 text-amber-600" /> Test Account Roles:
             </span>
             <span>Click to fill</span>
           </div>
@@ -193,78 +210,38 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess, initialMode 
             </div>
           </div>
 
-          {/* Phone & Role for Signup */}
+          {/* Phone & City for Signup */}
           {mode === 'signup' && (
-            <>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-slate-500 uppercase tracking-wider mb-1 text-[10px]">Mobile Phone</label>
-                  <div className="relative">
-                    <Phone className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
-                    <input 
-                      type="tel" 
-                      required
-                      placeholder="+91 94191 00000"
-                      value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-300 rounded pl-9 pr-3 py-2 text-xs text-slate-900 focus:outline-none"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-slate-500 uppercase tracking-wider mb-1 text-[10px]">Primary City</label>
-                  <div className="relative">
-                    <MapPin className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
-                    <input 
-                      type="text" 
-                      required
-                      value={city}
-                      onChange={(e) => setCity(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-300 rounded pl-9 pr-3 py-2 text-xs text-slate-900 focus:outline-none"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Role Selection Radio Cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className="block text-slate-500 uppercase tracking-wider mb-1.5 text-[10px]">Account Role</label>
-                <div className="grid grid-cols-2 gap-2 text-xs">
-                  <button
-                    type="button"
-                    onClick={() => setRole('buyer')}
-                    className={`p-2.5 rounded-lg border text-left flex items-center gap-2 transition-all ${
-                      role === 'buyer' ? 'border-brand-700 bg-blue-50/50 text-brand-900 font-bold' : 'border-slate-200 text-slate-700 hover:bg-slate-50'
-                    }`}
-                  >
-                    <User className="w-4 h-4 text-brand-600 shrink-0" />
-                    <div>
-                      <div className="text-[11px] leading-tight">Buyer / Tenant</div>
-                      <div className="text-[9px] text-slate-500 font-normal">Search properties</div>
-                    </div>
-                  </button>
-
-
-
-                  <button
-                    type="button"
-                    onClick={() => setRole('broker')}
-                    className={`p-2.5 rounded-lg border text-left flex items-center gap-2 transition-all ${
-                      role === 'broker' ? 'border-purple-600 bg-purple-50/50 text-purple-900 font-bold' : 'border-slate-200 text-slate-700 hover:bg-slate-50'
-                    }`}
-                  >
-                    <Briefcase className="w-4 h-4 text-purple-600 shrink-0" />
-                    <div>
-                      <div className="text-[11px] leading-tight">Broker / Agent</div>
-                      <div className="text-[9px] text-slate-500 font-normal">Lead hub & inventory</div>
-                    </div>
-                  </button>
-
-
+                <label className="block text-slate-500 uppercase tracking-wider mb-1 text-[10px]">Mobile Phone</label>
+                <div className="relative">
+                  <Phone className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                  <input 
+                    type="tel" 
+                    required
+                    placeholder="+91 94191 00000"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-300 rounded pl-9 pr-3 py-2 text-xs text-slate-900 focus:outline-none"
+                  />
                 </div>
               </div>
-            </>
+
+              <div>
+                <label className="block text-slate-500 uppercase tracking-wider mb-1 text-[10px]">Primary City</label>
+                <div className="relative">
+                  <MapPin className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                  <input 
+                    type="text" 
+                    required
+                    value={city}
+                    onChange={(e) => setCity(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-300 rounded pl-9 pr-3 py-2 text-xs text-slate-900 focus:outline-none"
+                  />
+                </div>
+              </div>
+            </div>
           )}
 
           {/* Password Input */}
@@ -307,7 +284,7 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess, initialMode 
               : mode === 'login' 
               ? 'Sign In to Account' 
               : mode === 'signup' 
-              ? 'Create Account' 
+              ? 'Create Customer Account' 
               : 'Send Reset Link'
             }
           </button>

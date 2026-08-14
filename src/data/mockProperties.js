@@ -33,8 +33,7 @@ export const MOCK_PROPERTIES = [
     ],
     floorPlanUrl: 'https://images.unsplash.com/photo-1600585152220-90363fe7e115?auto=format&fit=crop&w=1000&q=80',
     amenities: [
-      'Private Lawns', 'Covered Car Parking (3 Cars)', '24x7 Water Supply',
-      'Power Backup Inverter', 'Servant Quarters', 'Modular Teak Kitchen'
+      'Parking', 'Power Backup', 'Water Supply', 'Security', 'AC', 'Balcony'
     ],
     localityAdvantages: [
       { name: 'Gandhi Nagar Main Market', distance: '0.4 km' },
@@ -83,8 +82,7 @@ export const MOCK_PROPERTIES = [
     ],
     floorPlanUrl: 'https://images.unsplash.com/photo-1600585152220-90363fe7e115?auto=format&fit=crop&w=1000&q=80',
     amenities: [
-      'Gated 24x7 Security', 'Elevator', 'Clubhouse & Gym',
-      'Stilt Car Parking', 'Power Backup Generator', 'Children Play Zone'
+      'Parking', 'Power Backup', 'Water Supply', 'Security', 'Lift', 'Gym'
     ],
     localityAdvantages: [
       { name: 'Railway Station Jammu', distance: '1.8 km' },
@@ -132,8 +130,7 @@ export const MOCK_PROPERTIES = [
     ],
     floorPlanUrl: 'https://images.unsplash.com/photo-1600585152220-90363fe7e115?auto=format&fit=crop&w=1000&q=80',
     amenities: [
-      'Independent Car Parking', 'Modulated Wardrobes',
-      'Overhead Water Storage', 'Wide 30ft Front Road'
+      'Parking', 'Power Backup', 'Water Supply', 'Furnished', 'Balcony'
     ],
     localityAdvantages: [
       { name: 'National Highway NH44', distance: '0.8 km' },
@@ -181,7 +178,7 @@ export const MOCK_PROPERTIES = [
     ],
     floorPlanUrl: 'https://images.unsplash.com/photo-1600585152220-90363fe7e115?auto=format&fit=crop&w=1000&q=80',
     amenities: [
-      'Corner Plot', '35ft Wide Blacktop Road', 'Water Line Connected', 'Electricity Meter Ready'
+      'Water Supply', 'Power Backup'
     ],
     localityAdvantages: [
       { name: 'Jammu Tawi Golf Course', distance: '1.2 km' },
@@ -204,7 +201,7 @@ export const MOCK_PROPERTIES = [
     city: 'Jammu',
     locality: 'Sainik Colony',
     address: 'Sector 7, Near Sainik School Gate, Jammu',
-    priceVal: 22000, // ₹22,000 / month
+    priceVal: 22000, 
     priceDisplay: '₹22,000 / mo',
     depositDisplay: '₹44,000 Deposit',
     pricePerSqFt: 18,
@@ -230,7 +227,7 @@ export const MOCK_PROPERTIES = [
     ],
     floorPlanUrl: 'https://images.unsplash.com/photo-1600585152220-90363fe7e115?auto=format&fit=crop&w=1000&q=80',
     amenities: [
-      'Semi-Furnished', 'Separate Electric Meter', 'Car Parking inside boundary', 'Geysers installed'
+      'Parking', 'Power Backup', 'Water Supply', 'Furnished', 'Balcony'
     ],
     localityAdvantages: [
       { name: 'Sainik Colony Shopping Plaza', distance: '0.3 km' },
@@ -243,5 +240,157 @@ export const MOCK_PROPERTIES = [
       localityGrowth5Yr: '+14.5%'
     },
     description: 'Ground floor 2 BHK independent rental home in peaceful Sainik Colony Sector 7. Ideal for officers, bank managers, and families.'
+  },
+
+  // PG & HOSTEL LISTINGS (PHASE 3 PG MARKETPLACE)
+  {
+    id: 'ez-pg-201',
+    title: 'Sunrise Student PG & Hostel near MIET',
+    listingType: 'pg',
+    propertyType: 'pg',
+    city: 'Jammu',
+    locality: 'Kot Bhalwal',
+    address: 'Opposite MIET Engineering College Gate 2, Bantalab Road, Jammu',
+    priceVal: 7500,
+    priceDisplay: '₹7,500 / mo',
+    depositDisplay: '₹5,000 Deposit',
+    pricePerSqFt: 25,
+    bhk: 1,
+    bathrooms: 1,
+    balconies: 1,
+    carpetArea: 300,
+    builtUpArea: 350,
+    floor: '1st & 2nd Floor',
+    facing: 'North Facing',
+    possessionStatus: 'Ready to Move',
+    ageOfProperty: '1 Year',
+    maintenanceMonthly: 0,
+    reraId: 'JKRERA/JM/PG/2026/00201',
+    isReraVerified: true,
+    sellerType: 'Owner',
+    sellerName: 'Sunil Mahajan (PG Warden & Owner)',
+    sellerPhone: '+91 94192 11002',
+    sellerWhatsApp: '919419211002',
+    pgGender: 'Boys',
+    roomType: '2 Sharing',
+    availableBeds: 3,
+    totalBeds: 12,
+    foodIncluded: true,
+    collegeId: 'miet',
+    collegeName: 'MIET Jammu',
+    collegeDistanceKm: 0.3, // 300 meters from MIET
+    latitude: 32.794,
+    longitude: 74.836,
+    images: [
+      'https://images.unsplash.com/photo-1555854877-bab0e564b8d5?auto=format&fit=crop&w=1000&q=80',
+      'https://images.unsplash.com/photo-1595526114035-0d45ed16cfbf?auto=format&fit=crop&w=1000&q=80'
+    ],
+    amenities: [
+      'Wi-Fi', 'AC', 'Power Backup', 'Water Supply', 'Security', 'CCTV', 'Mess / Food Included', 'Laundry'
+    ],
+    rules: [
+      'Gate Curfew 10:00 PM', 'No Alcohol or Smoking', 'Visitors allowed till 7:30 PM in Common Hall'
+    ],
+    description: 'Premier Boys Student PG located right opposite MIET Engineering College. Offers 3 hygienic home-cooked meals daily, high-speed 100 Mbps fiber Wi-Fi, study desks, and 24x7 power backup.'
+  },
+  {
+    id: 'ez-pg-202',
+    title: 'Girls Luxury PG & Co-Living near Jammu University',
+    listingType: 'pg',
+    propertyType: 'pg',
+    city: 'Jammu',
+    locality: 'Channi Himmat',
+    address: 'Sector 3, Near Jammu University Road, Channi Himmat, Jammu',
+    priceVal: 8500,
+    priceDisplay: '₹8,500 / mo',
+    depositDisplay: '₹5,000 Deposit',
+    pricePerSqFt: 28,
+    bhk: 1,
+    bathrooms: 1,
+    balconies: 1,
+    carpetArea: 320,
+    builtUpArea: 380,
+    floor: '2nd Floor',
+    facing: 'East Facing',
+    possessionStatus: 'Ready to Move',
+    ageOfProperty: '2 Years',
+    maintenanceMonthly: 0,
+    reraId: 'JKRERA/JM/PG/2026/00202',
+    isReraVerified: true,
+    sellerType: 'Owner',
+    sellerName: 'Anuradha Sharma (Owner)',
+    sellerPhone: '+91 94191 88990',
+    sellerWhatsApp: '919419188990',
+    pgGender: 'Girls',
+    roomType: '2 Sharing',
+    availableBeds: 2,
+    totalBeds: 10,
+    foodIncluded: true,
+    collegeId: 'ju',
+    collegeName: 'Jammu University',
+    collegeDistanceKm: 1.8,
+    latitude: 32.720,
+    longitude: 74.872,
+    images: [
+      'https://images.unsplash.com/photo-1522771739844-6a9f6d5f14af?auto=format&fit=crop&w=1000&q=80',
+      'https://images.unsplash.com/photo-1598928506311-c55ded91a20c?auto=format&fit=crop&w=1000&q=80'
+    ],
+    amenities: [
+      'Wi-Fi', 'AC', 'Power Backup', 'Water Supply', 'Security', 'CCTV', 'Mess / Food Included', 'Laundry', 'Furnished'
+    ],
+    rules: [
+      'Gate Curfew 9:30 PM', 'Female Visitors Only', 'Strict Security Guard & Bio-metric Entry'
+    ],
+    description: 'Safe and premium Girls PG in Channi Himmat with 24x7 security guard, biometric entry, AC rooms, attached bathrooms, study lamps, and nutritious north-Indian meals.'
+  },
+  {
+    id: 'ez-pg-203',
+    title: 'Sidhra Student Co-Living & Hostel near IIT & ASCOMS',
+    listingType: 'pg',
+    propertyType: 'pg',
+    city: 'Jammu',
+    locality: 'Sidhra',
+    address: 'Near ASCOMS Medical College & IIT Jammu Transit Campus, Sidhra, Jammu',
+    priceVal: 6500,
+    priceDisplay: '₹6,500 / mo',
+    depositDisplay: '₹4,000 Deposit',
+    pricePerSqFt: 22,
+    bhk: 1,
+    bathrooms: 1,
+    balconies: 1,
+    carpetArea: 280,
+    builtUpArea: 320,
+    floor: 'Ground & 1st Floor',
+    facing: 'North-East',
+    possessionStatus: 'Ready to Move',
+    ageOfProperty: '1 Year',
+    maintenanceMonthly: 0,
+    reraId: 'JKRERA/JM/PG/2026/00203',
+    isReraVerified: true,
+    sellerType: 'Broker',
+    sellerName: 'Duggar Realty Student Housing Division',
+    sellerPhone: '+91 97960 77112',
+    sellerWhatsApp: '919796077112',
+    pgGender: 'Co-living',
+    roomType: '3 Sharing',
+    availableBeds: 5,
+    totalBeds: 18,
+    foodIncluded: true,
+    collegeId: 'ascoms',
+    collegeName: 'ASCOMS Medical College',
+    collegeDistanceKm: 1.1,
+    latitude: 32.758,
+    longitude: 74.904,
+    images: [
+      'https://images.unsplash.com/photo-1513694203232-719a280e022f?auto=format&fit=crop&w=1000&q=80',
+      'https://images.unsplash.com/photo-1505691938895-1758d7feb511?auto=format&fit=crop&w=1000&q=80'
+    ],
+    amenities: [
+      'Wi-Fi', 'Power Backup', 'Water Supply', 'Security', 'CCTV', 'Mess / Food Included', 'Parking'
+    ],
+    rules: [
+      'Curfew 10:30 PM', 'Quiet Study Hours after 11 PM'
+    ],
+    description: 'Affordable and well-connected student hostel & co-living space in Sidhra, catering to ASCOMS Medical College and IIT Jammu students. Includes Wi-Fi, power backup, study desks, and mess facilities.'
   }
 ];

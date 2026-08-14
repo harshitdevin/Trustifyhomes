@@ -12,7 +12,12 @@ import {
   CheckSquare,
   Square,
   Sparkles,
-  Compass
+  Compass,
+  GraduationCap,
+  Home,
+  Users,
+  Utensils,
+  AlertCircle
 } from 'lucide-react';
 
 export default function PropertyCard({ 
@@ -21,43 +26,75 @@ export default function PropertyCard({
   isShortlisted, 
   onToggleShortlist, 
   isCompared, 
-  onToggleCompare 
+  onToggleCompare,
+  selectedCollegeObj
 }) {
   const [currentImgIndex, setCurrentImgIndex] = useState(0);
   const [showPhone, setShowPhone] = useState(false);
 
+  const images = property.images && property.images.length > 0 
+    ? property.images 
+    : ['https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=1000&q=80'];
+
   const nextImg = (e) => {
     e.stopPropagation();
-    setCurrentImgIndex((prev) => (prev + 1) % property.images.length);
+    setCurrentImgIndex((prev) => (prev + 1) % images.length);
   };
 
   const prevImg = (e) => {
     e.stopPropagation();
-    setCurrentImgIndex((prev) => (prev - 1 + property.images.length) % property.images.length);
+    setCurrentImgIndex((prev) => (prev - 1 + images.length) % images.length);
   };
 
+  const isPg = property.listingType === 'pg' || property.propertyType === 'pg';
+  const isUnavailable = property.status && property.status !== 'approved' && property.status !== 'Approved' && property.status !== 'Active';
+
   return (
-    <div className="ez-card flex flex-col sm:flex-row overflow-hidden group">
+    <div className={`ez-card flex flex-col sm:flex-row overflow-hidden group border ${
+      isUnavailable ? 'border-amber-300 bg-amber-50/20 opacity-90' : 'border-slate-200'
+    }`}>
+      
       {/* Property Image Container */}
       <div className="sm:w-2/5 relative bg-slate-900 min-h-[220px] sm:min-h-[260px] overflow-hidden shrink-0">
         <img 
-          src={property.images[currentImgIndex]} 
+          src={images[currentImgIndex]} 
           alt={property.title} 
           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
         />
 
         {/* Top Image Badges */}
         <div className="absolute top-2.5 left-2.5 flex flex-wrap items-center gap-1.5 z-10">
-          {property.isReraVerified && (
-            <span className="bg-emerald-700 text-white text-[11px] font-bold px-2 py-0.5 rounded flex items-center gap-1 shadow-sm">
-              <ShieldCheck className="w-3.5 h-3.5" />
-              RERA Verified
+          {isPg ? (
+            <span className="bg-purple-900 text-white text-[11px] font-extrabold px-2 py-0.5 rounded flex items-center gap-1 shadow-sm uppercase">
+              <Home className="w-3.5 h-3.5 text-amber-400" />
+              {property.pgGender || 'PG / Hostel'}
+            </span>
+          ) : (
+            property.isReraVerified && (
+              <span className="bg-emerald-700 text-white text-[11px] font-bold px-2 py-0.5 rounded flex items-center gap-1 shadow-sm">
+                <ShieldCheck className="w-3.5 h-3.5" />
+                RERA Verified
+              </span>
+            )
+          )}
+
+          {property.foodIncluded && (
+            <span className="bg-amber-600 text-white text-[11px] font-bold px-2 py-0.5 rounded flex items-center gap-1 shadow-sm">
+              <Utensils className="w-3.5 h-3.5" />
+              Food Included
             </span>
           )}
 
-          {property.sellerType === 'Owner' && (
+          {property.sellerType === 'Owner' && !isPg && (
             <span className="bg-blue-600 text-white text-[11px] font-bold px-2 py-0.5 rounded shadow-sm">
               Zero Brokerage
+            </span>
+          )}
+
+          {isUnavailable && (
+            <span className="bg-amber-700 text-white text-[11px] font-bold px-2 py-0.5 rounded flex items-center gap-1 shadow-sm">
+              <AlertCircle className="w-3.5 h-3.5" />
+              Listing No Longer Available
             </span>
           )}
         </div>
@@ -75,7 +112,7 @@ export default function PropertyCard({
         </button>
 
         {/* Photo Navigation Arrows */}
-        {property.images.length > 1 && (
+        {images.length > 1 && (
           <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 flex justify-between px-2 pointer-events-none">
             <button 
               onClick={prevImg}
@@ -94,7 +131,7 @@ export default function PropertyCard({
 
         {/* Photo Count Indicator */}
         <div className="absolute bottom-2 right-2 bg-black/70 text-white text-[10px] font-bold px-2 py-0.5 rounded">
-          {currentImgIndex + 1} / {property.images.length} Photos
+          {currentImgIndex + 1} / {images.length} Photos
         </div>
       </div>
 
@@ -104,8 +141,10 @@ export default function PropertyCard({
           {/* Title & Price Header */}
           <div className="flex flex-wrap items-start justify-between gap-2 mb-2">
             <div>
-              <span className="text-[11px] font-extrabold text-brand-700 uppercase tracking-wider bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
-                {property.bhk} BHK • {property.propertyType}
+              <span className={`text-[11px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded border ${
+                isPg ? 'bg-purple-50 text-purple-900 border-purple-200' : 'bg-blue-50 text-brand-700 border-blue-200'
+              }`}>
+                {isPg ? `${property.roomType || 'Student PG'} • ${property.pgGender || 'Co-living'}` : `${property.bhk} BHK • ${property.propertyType}`}
               </span>
               <h3 
                 onClick={() => onSelectProperty(property)}
@@ -125,97 +164,110 @@ export default function PropertyCard({
                 {property.priceDisplay}
               </div>
               <p className="text-xs font-semibold text-slate-500">
-                ₹{property.pricePerSqFt.toLocaleString('en-IN')} / sq.ft
+                {isPg ? (property.depositDisplay || 'Low Security Deposit') : `₹${(property.pricePerSqFt || 5000).toLocaleString('en-IN')} / sq.ft`}
               </p>
             </div>
           </div>
 
           {/* Key Specs Grid Bar */}
           <div className="bg-slate-50 border border-slate-200 rounded-md p-2.5 my-3 grid grid-cols-3 gap-2 text-xs">
-            <div>
-              <span className="text-slate-400 text-[10px] uppercase font-bold block">Carpet Area</span>
-              <span className="font-extrabold text-slate-800">{property.carpetArea} sq.ft</span>
-            </div>
-
-            <div>
-              <span className="text-slate-400 text-[10px] uppercase font-bold block">Facing</span>
-              <span className="font-extrabold text-slate-800 truncate block">{property.facing}</span>
-            </div>
-
-            <div>
-              <span className="text-slate-400 text-[10px] uppercase font-bold block">Possession</span>
-              <span className="font-extrabold text-slate-800">{property.possessionStatus}</span>
-            </div>
+            {isPg ? (
+              <>
+                <div>
+                  <span className="text-purple-800 text-[10px] uppercase font-bold block">Room Sharing</span>
+                  <span className="font-extrabold text-slate-800">{property.roomType || '2 Sharing'}</span>
+                </div>
+                <div>
+                  <span className="text-emerald-700 text-[10px] uppercase font-bold block">Available Beds</span>
+                  <span className="font-extrabold text-emerald-800">{property.availableBeds ? `${property.availableBeds} beds available` : 'Beds Available'}</span>
+                </div>
+                <div>
+                  <span className="text-brand-700 text-[10px] uppercase font-bold block">College Proximity</span>
+                  <span className="font-extrabold text-slate-800 truncate block">
+                    {property.collegeDistanceKm !== undefined ? `⚡ ${property.collegeDistanceKm} km (${property.collegeName || 'College'})` : 'Distance unavailable'}
+                  </span>
+                </div>
+              </>
+            ) : (
+              <>
+                <div>
+                  <span className="text-slate-400 text-[10px] uppercase font-bold block">Carpet Area</span>
+                  <span className="font-extrabold text-slate-800">{property.carpetArea} sq.ft</span>
+                </div>
+                <div>
+                  <span className="text-slate-400 text-[10px] uppercase font-bold block">Facing</span>
+                  <span className="font-extrabold text-slate-800 truncate block">{property.facing}</span>
+                </div>
+                <div>
+                  <span className="text-slate-400 text-[10px] uppercase font-bold block">Possession</span>
+                  <span className="font-extrabold text-slate-800">{property.possessionStatus}</span>
+                </div>
+              </>
+            )}
           </div>
 
-          {/* AI Fair Market Estimate Pill */}
-          {property.aiFairPriceEstimate && (
-            <div className="flex items-center gap-2 text-xs bg-slate-100 p-2 rounded border border-slate-200 mb-3">
-              <Sparkles className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-              <span className="text-slate-700">
-                <strong className="text-slate-900">AI Valuation:</strong> Fair Price ({property.aiFairPriceEstimate.min} - {property.aiFairPriceEstimate.max})
-              </span>
-              <span className="ml-auto text-emerald-700 font-bold bg-emerald-50 px-1.5 py-0.5 rounded text-[10px] border border-emerald-200">
-                {property.aiFairPriceEstimate.localityGrowth5Yr} 5-Yr Growth
-              </span>
+          {/* Key Amenities Badges Chips */}
+          {property.amenities && property.amenities.length > 0 && (
+            <div className="flex flex-wrap items-center gap-1.5 mb-3">
+              {property.amenities.slice(0, 4).map((a, idx) => (
+                <span key={idx} className="bg-slate-100 text-slate-700 text-[10px] font-bold px-2 py-0.5 rounded border border-slate-200">
+                  {a}
+                </span>
+              ))}
             </div>
           )}
-
-          {/* RERA Registration Text */}
-          <div className="text-[11px] text-slate-500 mb-3 flex items-center justify-between">
-            <span className="truncate">
-              <strong>RERA:</strong> {property.reraId}
-            </span>
-            <span className="text-slate-600 font-semibold bg-slate-100 px-2 py-0.5 rounded">
-              Posted by {property.sellerType}
-            </span>
-          </div>
         </div>
 
         {/* Action Buttons Row */}
         <div className="pt-3 border-t border-slate-200 flex flex-wrap items-center justify-between gap-2">
-          {/* Compare Checkbox */}
-          <button 
-            onClick={() => onToggleCompare(property.id)}
-            className="flex items-center gap-1.5 text-xs font-semibold text-slate-600 hover:text-slate-900"
-          >
-            {isCompared ? (
-              <CheckSquare className="w-4 h-4 text-brand-700" />
-            ) : (
-              <Square className="w-4 h-4 text-slate-400" />
-            )}
-            <span>Compare</span>
-          </button>
+          {/* Compare Checkbox (For standard properties) */}
+          {!isPg ? (
+            <button 
+              onClick={() => onToggleCompare(property.id)}
+              className="flex items-center gap-1.5 text-xs font-semibold text-slate-600 hover:text-slate-900"
+            >
+              {isCompared ? (
+                <CheckSquare className="w-4 h-4 text-brand-700" />
+              ) : (
+                <Square className="w-4 h-4 text-slate-400" />
+              )}
+              <span>Compare</span>
+            </button>
+          ) : (
+            <div className="text-[10px] font-bold text-purple-900 flex items-center gap-1">
+              <GraduationCap className="w-3.5 h-3.5 text-purple-700" />
+              Verified Student Housing
+            </div>
+          )}
 
           {/* CTAs: WhatsApp, Call, View Details */}
           <div className="flex items-center gap-2">
-            {/* WhatsApp Link CTA */}
             <a 
-              href={`https://wa.me/${property.sellerWhatsApp}?text=Hi,%20I%20am%20interested%20in%20your%20property%20listing:%20${encodeURIComponent(property.title)}%20(Ref:%20${property.id})`}
+              href={`https://wa.me/${property.sellerWhatsApp}?text=Hi,%20I%20am%20interested%20in%20your%20listing:%20${encodeURIComponent(property.title)}`}
               target="_blank"
               rel="noreferrer"
               className="ez-btn-whatsapp py-1.5 px-3 text-xs"
-              title="Chat on WhatsApp with Seller"
+              title="Chat on WhatsApp"
             >
               <MessageSquare className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">WhatsApp</span>
             </a>
 
-            {/* Direct Phone Call Reveal CTA */}
             <button 
               onClick={() => setShowPhone(!showPhone)}
               className="ez-btn-outline py-1.5 px-3 text-xs border-blue-300 text-brand-700 bg-blue-50/50 hover:bg-blue-100"
             >
               <Phone className="w-3.5 h-3.5" />
-              <span>{showPhone ? property.sellerPhone : 'Call Seller'}</span>
+              <span>{showPhone ? property.sellerPhone : (isPg ? 'Call Warden' : 'Call Owner')}</span>
             </button>
 
-            {/* View Full Property Details */}
             <button 
               onClick={() => onSelectProperty(property)}
-              className="ez-btn-primary py-1.5 px-3 text-xs"
+              className={`py-1.5 px-3 text-xs font-extrabold rounded text-white transition-all shadow-xs ${
+                isPg ? 'bg-purple-900 hover:bg-purple-950' : 'bg-slate-900 hover:bg-slate-800'
+              }`}
             >
-              <span>View Details</span>
+              <span>{isPg ? 'View PG' : 'View Details'}</span>
             </button>
           </div>
         </div>

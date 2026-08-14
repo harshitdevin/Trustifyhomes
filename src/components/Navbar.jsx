@@ -24,7 +24,11 @@ import {
   Settings,
   Send,
   Sparkles,
-  Search
+  Search,
+  Inbox,
+  Bell,
+  FileText,
+  FileCheck
 } from 'lucide-react';
 import { CITIES_DATA } from '../data/citiesAndLocalities';
 
@@ -39,6 +43,7 @@ export default function Navbar({
   onOpenRentAgreement,
   onOpenUnitConverter, 
   onOpenPostProperty,
+  onOpenListYourProperty,
   userRole,
   setUserRole,
   activeView,
@@ -53,21 +58,23 @@ export default function Navbar({
 }) {
   const isConsumerView = activeView === 'marketplace' || activeView === 'profile';
   const isAdminView = activeView === 'admin';
-  const isBrokerView = activeView === 'broker' || activeView === 'owner';
+  const isBrokerView = activeView === 'broker';
 
   const ADMIN_NAV_SECTIONS = [
-    { id: 'home', label: 'Overview', icon: LayoutDashboard },
+    { id: 'home', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'statistics', label: 'Statistics', icon: BarChart3 },
     { id: 'customers', label: 'Customers', icon: Users },
+    { id: 'brokers', label: 'Brokers', icon: Briefcase },
     { id: 'properties', label: 'Properties', icon: Building },
     { id: 'pg', label: 'PG Listings', icon: Home },
-    { id: 'brokers', label: 'Brokers', icon: Briefcase },
+    { id: 'listing_requests', label: 'Listing Requests', icon: Inbox },
     { id: 'leads', label: 'Leads', icon: Activity },
-    { id: 'verification', label: 'Verification', icon: ShieldCheck },
     { id: 'enquiries', label: 'Enquiries', icon: MessageSquare },
     { id: 'site_visits', label: 'Site Visits', icon: Calendar },
-    { id: 'payments', label: 'Payments', icon: CreditCard },
-    { id: 'settings', label: 'Logs', icon: Settings }
+    { id: 'verification', label: 'Verification', icon: ShieldCheck },
+    { id: 'reports', label: 'Reports', icon: FileText },
+    { id: 'notifications', label: 'Notifications', icon: Bell },
+    { id: 'settings', label: 'Settings', icon: Settings }
   ];
 
   const BROKER_NAV_SECTIONS = [
@@ -93,7 +100,7 @@ export default function Navbar({
               100% JK RERA Verified & Govt Registered Platform
             </span>
             <span className="hidden md:inline text-slate-500">•</span>
-            <span className="hidden md:inline text-slate-400">Jammu Real Estate Portal</span>
+            <span className="hidden md:inline text-slate-400">Jammu Real Estate & Student Housing Portal</span>
           </div>
 
           <div className="flex items-center gap-4 text-slate-300">
@@ -144,12 +151,12 @@ export default function Navbar({
             </div>
             <div>
               <div className="flex items-center gap-1.5">
-                <span className="text-xl font-extrabold tracking-tight text-slate-900">EZ HOMES</span>
+                <span className="text-xl font-extrabold tracking-tight text-slate-900">TRUSTIFY HOMES</span>
                 <span className="bg-emerald-100 text-emerald-800 text-[10px] font-bold px-1.5 py-0.5 rounded border border-emerald-300">
                   JAMMU
                 </span>
               </div>
-              <p className="text-[10px] font-medium text-slate-500 tracking-wide uppercase">Jammu Real Estate Portal</p>
+              <p className="text-[10px] font-medium text-slate-500 tracking-wide uppercase">Property & PG Portal</p>
             </div>
           </div>
 
@@ -176,7 +183,7 @@ export default function Navbar({
 
         {/* Dynamic Navigation Bar Style according to Active View */}
         <nav className="hidden lg:flex items-center gap-1 font-semibold text-xs overflow-x-auto py-1">
-          {/* Consumer View Links (Shown ONLY on Marketplace / Consumer view) */}
+          {/* Consumer View Links */}
           {isConsumerView && (
             <>
               <button 
@@ -202,6 +209,18 @@ export default function Navbar({
               </button>
 
               <button 
+                onClick={() => { setActiveView('marketplace'); setActiveTab('pg'); }}
+                className={`px-3 py-2 rounded-md transition-colors flex items-center gap-1 ${
+                  activeView === 'marketplace' && activeTab === 'pg' 
+                    ? 'bg-purple-50 text-purple-900 font-bold border border-purple-300' 
+                    : 'text-slate-700 hover:bg-slate-100'
+                }`}
+              >
+                <Home className="w-3.5 h-3.5 text-purple-700" />
+                <span>PG / Student Housing</span>
+              </button>
+
+              <button 
                 onClick={() => { setActiveView('marketplace'); setActiveTab('plot'); }}
                 className={`px-3 py-2 rounded-md transition-colors ${
                   activeView === 'marketplace' && activeTab === 'plot' 
@@ -209,14 +228,26 @@ export default function Navbar({
                     : 'text-slate-700 hover:bg-slate-100'
                 }`}
               >
-                Plots (Kanal/Marla)
+                Plots (Kanal)
+              </button>
+
+              <button 
+                onClick={() => { setActiveView('marketplace'); setActiveTab('saved'); }}
+                className={`px-3 py-2 rounded-md transition-colors flex items-center gap-1 ${
+                  activeView === 'marketplace' && activeTab === 'saved' 
+                    ? 'bg-rose-50 text-rose-700 font-bold border border-rose-200' 
+                    : 'text-slate-700 hover:bg-slate-100'
+                }`}
+              >
+                <Heart className="w-3.5 h-3.5 text-rose-600 fill-rose-600" />
+                <span>Saved ({shortlistCount})</span>
               </button>
             </>
           )}
 
-          {/* Admin Navigation Bar Sections (Shown ONLY on Admin View) */}
+          {/* Admin Navigation Bar Sections */}
           {isAdminView && (
-            <div className="flex items-center gap-1 bg-purple-50 p-1 rounded-lg border border-purple-200">
+            <div className="flex items-center gap-1 bg-purple-50 p-1 rounded-lg border border-purple-200 overflow-x-auto">
               {ADMIN_NAV_SECTIONS.map((sec) => {
                 const IconComp = sec.icon;
                 const isActive = adminTab === sec.id;
@@ -224,13 +255,13 @@ export default function Navbar({
                   <button
                     key={sec.id}
                     onClick={() => setAdminTab(sec.id)}
-                    className={`px-2.5 py-1.5 rounded-md transition-all flex items-center gap-1.5 whitespace-nowrap font-bold text-xs ${
+                    className={`px-2 py-1 rounded-md transition-all flex items-center gap-1 whitespace-nowrap font-bold text-[11px] ${
                       isActive 
                         ? 'bg-purple-950 text-white shadow-xs' 
                         : 'text-purple-900 hover:bg-purple-100'
                     }`}
                   >
-                    <IconComp className={`w-3.5 h-3.5 ${isActive ? 'text-purple-300' : 'text-purple-700'}`} />
+                    <IconComp className={`w-3.5 h-3.5 ${isActive ? 'text-amber-400' : 'text-purple-700'}`} />
                     <span>{sec.label}</span>
                   </button>
                 );
@@ -238,7 +269,7 @@ export default function Navbar({
             </div>
           )}
 
-          {/* Broker Navigation Bar Sections (Shown ONLY on Broker View) */}
+          {/* Broker Navigation Bar Sections */}
           {isBrokerView && (
             <div className="flex items-center gap-1 bg-amber-50 p-1 rounded-lg border border-amber-200">
               {BROKER_NAV_SECTIONS.map((sec) => {
@@ -263,18 +294,29 @@ export default function Navbar({
           )}
         </nav>
 
-        {/* User Role Switcher, Auth & Action Controls */}
+        {/* User Role Switcher, Auth & Public CTAs */}
         <div className="flex items-center gap-2 sm:gap-3 shrink-0">
           
-          {/* Static User Role Badge */}
+          {/* Public Owner CTA: List Your Property */}
+          {isConsumerView && (
+            <button 
+              onClick={onOpenListYourProperty}
+              className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold text-xs px-3 py-2 rounded-lg flex items-center gap-1.5 transition-colors shadow-xs"
+              title="Owners: Submit property to Trustify"
+            >
+              <PlusCircle className="w-4 h-4 text-slate-950" />
+              <span>List Your Property</span>
+            </button>
+          )}
+
+          {/* User Role Badge */}
           <div className="flex items-center gap-1.5 bg-slate-100 border border-slate-300 px-2.5 py-1.5 rounded-md text-xs font-bold">
             <span className="text-slate-500 text-[10px] uppercase tracking-wider hidden sm:inline">Role:</span>
             <span className={`text-[10px] font-extrabold uppercase px-2 py-0.5 rounded shadow-2xs ${
               userRole === 'admin' ? 'bg-purple-950 text-white' :
-              userRole === 'broker' ? 'bg-amber-500 text-slate-950' :
-              userRole === 'owner' ? 'bg-blue-600 text-white' : 'bg-emerald-600 text-white'
+              userRole === 'broker' ? 'bg-amber-500 text-slate-950' : 'bg-emerald-600 text-white'
             }`}>
-              {userRole}
+              {userRole === 'buyer' || userRole === 'student' ? 'customer' : userRole}
             </span>
           </div>
 
@@ -311,43 +353,10 @@ export default function Navbar({
               <span>Login / Register</span>
             </button>
           )}
-
-          {/* Shortlists Button (Consumer view only) */}
-          {isConsumerView && (
-            <button 
-              onClick={() => { setActiveView('marketplace'); setActiveTab('saved'); }}
-              className={`relative p-2 rounded-md transition-colors flex items-center gap-1 text-sm font-medium ${
-                activeView === 'marketplace' && activeTab === 'saved' ? 'bg-red-50 text-red-700' : 'text-slate-700 hover:bg-slate-100'
-              }`}
-              title="View saved shortlisted properties"
-            >
-              <Heart className={`w-5 h-5 ${shortlistCount > 0 ? 'text-red-600 fill-red-600' : 'text-slate-600'}`} />
-              <span className="hidden sm:inline">Saved</span>
-              {shortlistCount > 0 && (
-                <span className="bg-red-600 text-white text-xs font-bold w-5 h-5 rounded-full flex items-center justify-center">
-                  {shortlistCount}
-                </span>
-              )}
-            </button>
-          )}
-
-          {/* Post Property Button (Consumer / Owner view only - hidden on broker & admin pages as requested) */}
-          {isConsumerView && (userRole === 'owner' || userRole === 'buyer') && (
-            <button 
-              onClick={onOpenPostProperty}
-              className="ez-btn-primary bg-amber-600 hover:bg-amber-700 text-white shadow-sm text-sm"
-            >
-              <PlusCircle className="w-4 h-4" />
-              <span>Post Property</span>
-              <span className="bg-white text-amber-800 text-[10px] font-extrabold px-1.5 py-0.2 rounded uppercase">
-                FREE
-              </span>
-            </button>
-          )}
         </div>
       </div>
 
-      {/* Secondary Bar for Mobile & Compact Screens displaying active role navigation */}
+      {/* Secondary Bar for Mobile displaying active role navigation */}
       {!isConsumerView && (
         <div className="lg:hidden bg-slate-100 border-t border-slate-200 px-4 py-2 overflow-x-auto">
           {isAdminView && (
@@ -365,7 +374,6 @@ export default function Navbar({
               ))}
             </div>
           )}
-
           {isBrokerView && (
             <div className="flex items-center gap-1 text-xs font-bold">
               {BROKER_NAV_SECTIONS.map((sec) => (
@@ -373,7 +381,7 @@ export default function Navbar({
                   key={sec.id}
                   onClick={() => setBrokerTab(sec.id)}
                   className={`px-2.5 py-1.5 rounded-md whitespace-nowrap ${
-                    brokerTab === sec.id ? 'bg-slate-900 text-white' : 'bg-white text-slate-800 border border-slate-200'
+                    brokerTab === sec.id ? 'bg-slate-900 text-white' : 'bg-white text-slate-900 border border-slate-200'
                   }`}
                 >
                   {sec.label}
